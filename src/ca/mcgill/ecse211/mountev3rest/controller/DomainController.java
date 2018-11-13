@@ -1,5 +1,7 @@
 package ca.mcgill.ecse211.mountev3rest.controller;
 
+import java.util.logging.Handler;
+
 import ca.mcgill.ecse211.mountev3rest.navigation.Display;
 import ca.mcgill.ecse211.mountev3rest.navigation.Localizer;
 import ca.mcgill.ecse211.mountev3rest.navigation.Navigation;
@@ -15,6 +17,7 @@ import lejos.hardware.Button;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
+import lejos.hardware.motor.EV3MediumRegulatedMotor;
 import lejos.hardware.sensor.EV3ColorSensor;
 import lejos.hardware.sensor.EV3GyroSensor;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
@@ -91,8 +94,8 @@ public class DomainController {
     // Get motor objects
     leftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("D"));
     rightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("A"));
-    EV3LargeRegulatedMotor armLeftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("C"));
-    EV3LargeRegulatedMotor armRightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("B"));
+    EV3MediumRegulatedMotor colorSensorMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("C"));
+    EV3MediumRegulatedMotor armMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("B"));
 
     // Instantiate the sensors
     EV3GyroSensor gyroSensor = new EV3GyroSensor(LocalEV3.get().getPort("S1"));
@@ -109,8 +112,10 @@ public class DomainController {
         MOTOR_OFFSET, GYRO_PATH_CORRECTION);
     localizer = new Localizer(leftMotor, rightMotor, navigation, odometryCorrector,
         SENSOR_OFFSET_STRAIGHT, SENSOR_OFFSET_ANGLE, TILE_SIZE);
-    armController = new ArmController(armLeftMotor, armRightMotor, leftMotor, rightMotor, navigation);
-    colorDetector = new ColorDetector(LocalEV3.get().getTextLCD(), lightPoller);
+     colorDetector = new ColorDetector(LocalEV3.get().getTextLCD(), lightPoller);
+     armController = new ArmController(colorSensorMotor, armMotor, leftMotor, rightMotor, navigation, colorDetector);
+    
+    
 
     // Initialize and start the required extra threads
     odoThread = new Thread(odometer);
@@ -227,7 +232,7 @@ public class DomainController {
    * @see ArmController
    */
   public int grabRings(int lastRingFound) {
-    armController.getRing(1);
+    armController.getRing();
     return 0;
   }
 

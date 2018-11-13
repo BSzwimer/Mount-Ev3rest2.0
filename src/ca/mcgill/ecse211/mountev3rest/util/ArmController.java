@@ -6,6 +6,7 @@ import ca.mcgill.ecse211.mountev3rest.sensor.LightPoller;
 import ca.mcgill.ecse211.mountev3rest.sensor.UltrasonicPoller;
 import lejos.hardware.Button;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
+import lejos.hardware.motor.EV3MediumRegulatedMotor;
 
 /**
  * Provides a set of methods to perform the basic subtasks required for ring collection.
@@ -21,8 +22,8 @@ public class ArmController {
   // Constants
   private static final int DISTANCE_TO_TREE = 5; // TODO
 
-  private EV3LargeRegulatedMotor motor1;
-  private EV3LargeRegulatedMotor motor2;
+  private EV3MediumRegulatedMotor colorSensorMotor;
+  private EV3MediumRegulatedMotor armMotor;
   private EV3LargeRegulatedMotor leftMotor;
   private EV3LargeRegulatedMotor rightMotor;
   private Navigation navigation;
@@ -35,14 +36,14 @@ public class ArmController {
    * @param motor1 Motor that will be used to control the height of the base on the arm.
    * @param motor2 Motor that will be used to control the displacement of the base on the arm.
    */
-  public ArmController(EV3LargeRegulatedMotor motor1, EV3LargeRegulatedMotor motor2,
-      EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor, Navigation navigation) {
-    this.motor1 = motor1;
-    this.motor2 = motor2;
+  public ArmController(EV3MediumRegulatedMotor colorSensorMotor, EV3MediumRegulatedMotor armMotor,
+      EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor, Navigation navigation, ColorDetector colorDetector) {
+    this.colorSensorMotor = colorSensorMotor;
+    this.armMotor = armMotor;
     this.leftMotor = leftMotor;
     this.rightMotor = rightMotor;
-    
     this.navigation = navigation;
+    this.colorDetector = colorDetector; 
   }
 
   /**
@@ -84,49 +85,46 @@ public class ArmController {
    * @param position Position of the ring to get, 1 for high or 0 for low.
    * @see ColorDetector
    */
-  public void getRing(int position) {
-    if (position == 0) { // Get low ring.
-      motor1.setSpeed(50);
-      motor2.setSpeed(50);
-      motor1.rotate(165, true);
-      motor2.rotate(165, false);
-      
-      leftMotor.setSpeed(50);
-      rightMotor.setSpeed(50);
-      
-      leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 7), true);
-      rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 7), false);
-      
-      motor1.setSpeed(25);
-      motor2.setSpeed(25);
-      motor1.rotate(-20, true);
-      motor2.rotate(-20, false);
-      
-      leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -7), true);
-      rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -7), false);
-    } else { // Get high ring.
-        motor1.setSpeed(50);
-        motor2.setSpeed(50);
-        motor1.rotate(125, true);
-        motor2.rotate(125, false);
-        
-        leftMotor.setSpeed(120);
-        rightMotor.setSpeed(120);
-        
-        leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 9), true);
-        rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 9), false);
-        
-        motor1.setSpeed(25);
-        motor2.setSpeed(25);
-        motor1.rotate(-20, true);
-        motor2.rotate(-20, false);
-        
-        leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -9), true);
-        rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -9), false);
-        motor1.rotate(100, true);
-        motor2.rotate(100, false);
-    }
-    Button.waitForAnyPress();
+  public void getRing( ) {
+	  
+	  	colorSensorMotor.setSpeed(25);
+	  	//need to determine correct angle to rotate to the top and bottom!!!!!!!!
+	  	colorSensorMotor.rotate(50);
+	  	
+	//  	long startingTime = System.currentTimeMillis(); 
+	  	while(true) {
+	  		int currentColor = 0; 
+	  		currentColor =colorDetector.getColor();
+	  			if(currentColor != 0)
+	  				{
+	  					break; 
+	  				} 	
+	  	}
+	  	
+	  	
+   
+    		//not tested yet, however much we want to open up the arm before approaching the tree 
+    		armMotor.setSpeed(50);
+    		armMotor.rotate(100, true);
+    		
+    		leftMotor.setSpeed(50);
+    		rightMotor.setSpeed(50);
+    		
+    		//not tested yet, dont know actual distance it should approach tree
+    		leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 5), true);
+    		rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 5), false); 
+    		
+    		//should be infront of the tree 
+    		armMotor.setSpeed(75);
+    		armMotor.rotate(-150);
+    		
+    		//back the fuckupppp 
+    		leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -5), true);
+    		rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -5), false);
+    		
+    		
+    		
+    	
   }
 
   /**
