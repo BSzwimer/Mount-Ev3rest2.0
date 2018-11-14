@@ -47,7 +47,7 @@ public class DomainController {
   private static final double TRACK = 8.70;
   private static final double WHEEL_RADIUS = 2.05;
   private static final double TILE_SIZE = 30.48;
-  private static final double MOTOR_OFFSET = 0.98; // TEST BATTERY IS 8V FOR BEST VALUE.
+  private static final double MOTOR_OFFSET = 1.01; // TEST BATTERY IS 8V FOR BEST VALUE.
   private static final double SENSOR_OFFSET = 12.5;
   private static final boolean TRAJECTORY_CORRECTION = true;
 
@@ -144,16 +144,20 @@ public class DomainController {
 
     if (BR_UR_x - BR_LL_x == 2) { // Bridge is placed horizontally.
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
+        navigation.travelTo(BR_LL_x - 1, BR_LL_y + 0.5);
+        navigation.waitNavigation();
         navigation.travelTo(BR_LL_x - 0.5, BR_LL_y + 0.5);
         navigation.waitNavigation();
-        navigation.disableCorrection();;
-        navigation.travelTo(BR_UR_x + 0.5, BR_UR_y - 0.5);
+        navigation.disableCorrection();
+        navigation.travelTo(BR_UR_x + 1, BR_UR_y - 0.5);
         navigation.waitNavigation();
       } else { // Robot is closer to the upper right corner.
+        navigation.travelTo(BR_UR_x + 1, BR_UR_y - 0.5);
+        navigation.waitNavigation();
         navigation.travelTo(BR_UR_x + 0.5, BR_UR_y - 0.5);
         navigation.waitNavigation();
         navigation.disableCorrection();
-        navigation.travelTo(BR_LL_x - 0.5, BR_LL_y + 0.5);
+        navigation.travelTo(BR_LL_x - 1, BR_LL_y + 0.5);
         navigation.waitNavigation();
       }
     } else { // Bridge is placed vertically.
@@ -249,18 +253,34 @@ public class DomainController {
     Thread disThread = new Thread(display);
     disThread.start();
 
-    localizer.localize(startCorner, 8, 8);
+    //localizer.localize(startCorner, 8, 8);
     // navigation.travelTo(0, 1);
     // navigation.waitNavigation();
-    navigation.travelTo(4, 1);
+    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
+    /*navigation.travelTo(4, 1);
     navigation.waitNavigation();
+    
+    Button.waitForAnyPress();
+    
     navigation.travelTo(4, 5);
     navigation.waitNavigation();
+    
+    Button.waitForAnyPress();*/
+    
+    //navigation.disableCorrection();
+    
+    /*leftMotor.setSpeed(150);
+    rightMotor.setSpeed(150);
+    leftMotor.forward();
+    rightMotor.forward();
+    
+    Button.waitForAnyPress();*/
 
-    /*
-     * crossTunnel(2, 3, 4, 4); navigation.travelTo(6.5, 2.5); navigation.waitNavigation();
-     * crossTunnel(2, 3, 4, 4); navigation.travelTo(1, 1); navigation.waitNavigation();
-     */
+    crossTunnel(2, 3, 4, 4);
+    navigation.travelTo(5, 5);
+    navigation.waitNavigation();
+    grabRings(0);
+
   }
 
   public void testColorDetection(TextLCD lcd) {

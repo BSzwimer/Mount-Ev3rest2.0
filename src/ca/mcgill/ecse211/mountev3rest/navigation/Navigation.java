@@ -3,6 +3,7 @@ package ca.mcgill.ecse211.mountev3rest.navigation;
 import java.util.LinkedList;
 import ca.mcgill.ecse211.mountev3rest.sensor.LightPoller;
 import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
+import lejos.hardware.Button;
 import lejos.hardware.Sound;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 
@@ -22,10 +23,10 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class Navigation implements Runnable {
 
   // Class constants
-  private static final int FORWARD_SPEED = 150;
+  private static final int FORWARD_SPEED = 120;
   private static final int ROTATE_SPEED = 80;
-  private static final int NAVIGATION_PERIOD = 50;
-  private static final int CORRECTION_TIME_LIMIT = 3000;
+  private static final int NAVIGATION_PERIOD = 25;
+  private static final int CORRECTION_TIME_LIMIT = 1000;
   private static final double TILE_SIZE = 30.48;
   private final double MOTOR_OFFSET;
   private final double SENSOR_OFFSET;
@@ -52,6 +53,9 @@ public class Navigation implements Runnable {
   private int lastXCorrection;
   private int lastYCorrection;
   private Direction direction;
+  private boolean correcting;
+  private long timeLeftDetection;
+  private long timeRightDetection;
 
   /**
    * Creates a navigator that will operate using the specified track and wheel radius values.
@@ -92,6 +96,7 @@ public class Navigation implements Runnable {
     rightInLine = false;
     this.trajectoryCorrection = trajectoryCorrection;
     direction = Direction.INIT;
+    correcting = false;
   }
 
   /**
@@ -117,9 +122,10 @@ public class Navigation implements Runnable {
 
       if (trajectoryCorrection) {
         
-        if (lightPoller.leftInLine) {
+        if (lightPoller.leftInLine && System.currentTimeMillis() - timeRightDetection > 300) {
           if (!leftInLine) {
             leftInLine = true;
+            timeLeftDetection = System.currentTimeMillis();
             if (!lightPoller.rightInLine)
               adjustTrajectory(1);
           }
@@ -127,9 +133,10 @@ public class Navigation implements Runnable {
           leftInLine = false;
         }
         
-        if (lightPoller.rightInLine) {
+        if (lightPoller.rightInLine && System.currentTimeMillis() - timeLeftDetection > 300) {
           if (!rightInLine) {
             rightInLine = true;
+            timeRightDetection = System.currentTimeMillis();
             if (!lightPoller.leftInLine)
               adjustTrajectory(0);
           }
@@ -230,7 +237,14 @@ public class Navigation implements Runnable {
   }
 
   public void waitNavigation() {
-    while (isNavigating) {
+	long time =System.currentTimeMillis();
+    while (true) {
+    	if (isNavigating)
+    		time =System.currentTimeMillis();
+    	else {
+    		if (System.currentTimeMillis() - time > 400)
+    			break;
+    	}
       try {
         Thread.sleep(NAVIGATION_PERIOD);
       } catch (InterruptedException e) {
@@ -303,9 +317,30 @@ public class Navigation implements Runnable {
     }
     
     if (distInTile > TILE_SIZE / 2)
-      return (int)((distInTile + (TILE_SIZE - odoReading)) / TILE_SIZE);
+      return (int)((odoReading + (TILE_SIZE - distInTile)) / TILE_SIZE);
     else
       return (int)((odoReading - distInTile)/TILE_SIZE);
+  }
+  
+  private double[] estimateLocation() {
+	  double HALF_TILE = TILE_SIZE / 2;
+	  
+	  double[] ret = new double[2];
+	  double[] position = odometer.getXYT();
+	  double distInX = position[0] % HALF_TILE;
+	  double distInY = position[1] % HALF_TILE;
+	    if (distInX > HALF_TILE / 2)
+	        ret[0] = (int)((position[0] + (HALF_TILE - distInX)) / TILE_SIZE);
+	      else
+	        ret[0] = (int)((position[0] - distInX)/TILE_SIZE);
+	    
+	    if (distInY > HALF_TILE / 2)
+	        ret[1] = (int)((position[1] + (HALF_TILE - distInY)) / TILE_SIZE);
+	      else
+	        ret[1] = (int)((position[1] - distInY)/TILE_SIZE);
+	    
+	    return ret;
+	  
   }
   
   /**
@@ -314,19 +349,26 @@ public class Navigation implements Runnable {
    * @param laggingSide
    */
   public void adjustTrajectory(int laggingSide) {
+	  
+	correcting = true;
     
     // Check that this line is no the same as the one for the past correction.
     int lastCorrection = -1;
-    if (direction == Direction.NORTH || direction == Direction.SOUTH) 
+    if (direction == Direction.NORTH || direction == Direction.SOUTH)
       lastCorrection = lastYCorrection;
     else if (direction == Direction.EAST || direction == Direction.WEST)
       lastCorrection = lastXCorrection;
     
     int currentLine = estimateCurrentLine();
     
+    System.out.println("Current line = " + currentLine);
+    
     if (lastCorrection == currentLine) {
       Sound.beep();
       Sound.beep();
+      Sound.beep();
+      Sound.beep();
+      correcting = false;
       return;
     }
     
@@ -378,6 +420,8 @@ public class Navigation implements Runnable {
         leftMotor.rotate(prevTacho - leftMotor.getTachoCount());
       else if (laggingSide == 1)
         rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
+      
+      directionChanged = true;
       return;
     }
     
@@ -403,8 +447,15 @@ public class Navigation implements Runnable {
       default:
     }
     
+    if (direction == Direction.NORTH || direction == Direction.SOUTH) 
+        lastYCorrection = currentLine;
+      else if (direction == Direction.EAST || direction == Direction.WEST)
+        lastXCorrection= currentLine;
+    
     // Indicate the state machine to recompute the direction.
     directionChanged = true;
+    isNavigating = true;
+    correcting = false;
     
   }
   

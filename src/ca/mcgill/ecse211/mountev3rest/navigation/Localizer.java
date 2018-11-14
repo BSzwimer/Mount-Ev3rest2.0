@@ -23,8 +23,9 @@ public class Localizer {
   // Constants
   private static final int LOCALIZATION_PERIOD = 25;
   private static final int ROTATE_SPEED = 80;
-  private static final int FORWARD_SPEED = 100;
+  private static final int FORWARD_SPEED = 150;
   private static final int THRESHOLD = 45;
+  private static final int CORRECTION_TIME_LIMIT = 1000;
   private final double SENSOR_OFFSET;
   private final double TILE_SIZE;
 
@@ -71,6 +72,10 @@ public class Localizer {
 
     this.SENSOR_OFFSET = SENSOR_OFFSET;
     this.TILE_SIZE = TILE_SIZE;
+  }
+  
+  public void tunnelLocalization() {
+	  
   }
 
   /**
@@ -164,8 +169,6 @@ public class Localizer {
         odometer.update(0, 0, 90);
         break;
     }
-    
-    odometer.update(0, 0, 180);
     
     if (wasEnabled)
       navigation.enableCorrection();
@@ -298,13 +301,22 @@ public class Localizer {
    * @param laggingSide
    */
   private void adjustTrajectory(int laggingSide) {
+    boolean goBack = false;
+    long startTime = System.currentTimeMillis();
+    int prevTacho = 0;  
+	  
     // Correct the direction
     if (laggingSide == 0) {
       rightMotor.setSpeed(0);
       leftMotor.setSpeed(ROTATE_SPEED / 2);
+      prevTacho = leftMotor.getTachoCount();
       while (true) {
-        if (lightPoller.leftInLine)
+        if (lightPoller.leftInLine) {
           break;
+        } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+            goBack = true;
+            break;
+        }
         try {
           Thread.sleep(LOCALIZATION_PERIOD);
         } catch (InterruptedException e) {
@@ -313,9 +325,13 @@ public class Localizer {
     } else if (laggingSide == 1) {
       leftMotor.setSpeed(0);
       rightMotor.setSpeed(ROTATE_SPEED / 2);
+      prevTacho = rightMotor.getTachoCount();
       while (true) {
         if (lightPoller.rightInLine) {
           break;
+        } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+            goBack = true;
+            break;
         }
         try {
           Thread.sleep(LOCALIZATION_PERIOD);
@@ -323,6 +339,14 @@ public class Localizer {
         }
       }
     }
+    
+    if (goBack) {
+        if (laggingSide == 0)
+          leftMotor.rotate(prevTacho - leftMotor.getTachoCount());
+        else if (laggingSide == 1)
+          rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
+        return;
+      }
   }
 
   /**

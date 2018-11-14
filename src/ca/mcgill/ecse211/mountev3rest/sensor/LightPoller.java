@@ -143,6 +143,7 @@ public class LightPoller extends Thread {
     if (leftMean[0] < LINE_COLOR_VALUE) {
       if (!leftInLine) {
         leftInLine = true;
+        Sound.beep();
       }
     } else {
       leftInLine = false;
@@ -151,6 +152,8 @@ public class LightPoller extends Thread {
     if (rightMean[0] < LINE_COLOR_VALUE) {
       if (!rightInLine) {
         rightInLine = true;
+        Sound.beep();
+        Sound.beep();
       }
     } else {
       rightInLine = false;
