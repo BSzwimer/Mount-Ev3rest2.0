@@ -88,8 +88,8 @@ public class DomainController {
     // Get motor objects
     leftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("D"));
     rightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("A"));
-    EV3MediumRegulatedMotor colorSensorMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("C"));
-    EV3MediumRegulatedMotor armMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("B"));
+    EV3MediumRegulatedMotor colorSensorMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("B"));
+    EV3MediumRegulatedMotor armMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("C"));
 
     // Instantiate the sensors
     EV3ColorSensor rightLightSensor = new EV3ColorSensor(LocalEV3.get().getPort("S1"));
@@ -215,7 +215,12 @@ public class DomainController {
    * @see ArmController
    */
   public int grabRings(int lastRingFound) {
+	boolean wasEnabled = navigation.isCorrectionEnabled();
+	navigation.disableCorrection();
     armController.getRing();
+    if (wasEnabled) {
+      navigation.enableCorrection();
+    }
     return 0;
   }
 
