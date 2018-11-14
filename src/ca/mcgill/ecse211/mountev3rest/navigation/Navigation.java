@@ -52,7 +52,7 @@ public class Navigation implements Runnable {
   private boolean rightInLine;
   private int lastXCorrection;
   private int lastYCorrection;
-  private Direction direction;
+  public Direction direction;
   private boolean correcting;
   private long timeLeftDetection;
   private long timeRightDetection;
@@ -122,10 +122,9 @@ public class Navigation implements Runnable {
 
       if (trajectoryCorrection) {
         
-        if (lightPoller.leftInLine && System.currentTimeMillis() - timeRightDetection > 300) {
+        if (lightPoller.leftInLine) {
           if (!leftInLine) {
             leftInLine = true;
-            timeLeftDetection = System.currentTimeMillis();
             if (!lightPoller.rightInLine)
               adjustTrajectory(1);
           }
@@ -133,10 +132,9 @@ public class Navigation implements Runnable {
           leftInLine = false;
         }
         
-        if (lightPoller.rightInLine && System.currentTimeMillis() - timeLeftDetection > 300) {
+        if (lightPoller.rightInLine) {
           if (!rightInLine) {
             rightInLine = true;
-            timeRightDetection = System.currentTimeMillis();
             if (!lightPoller.leftInLine)
               adjustTrajectory(0);
           }
@@ -285,7 +283,7 @@ public class Navigation implements Runnable {
    * 
    * @return
    */
-  private int estimateCurrentLine() {
+  public int estimateCurrentLine() {
     updateDirection();
     double position[] = odometer.getXYT();
     double distInTile;
@@ -320,27 +318,6 @@ public class Navigation implements Runnable {
       return (int)((odoReading + (TILE_SIZE - distInTile)) / TILE_SIZE);
     else
       return (int)((odoReading - distInTile)/TILE_SIZE);
-  }
-  
-  private double[] estimateLocation() {
-	  double HALF_TILE = TILE_SIZE / 2;
-	  
-	  double[] ret = new double[2];
-	  double[] position = odometer.getXYT();
-	  double distInX = position[0] % HALF_TILE;
-	  double distInY = position[1] % HALF_TILE;
-	    if (distInX > HALF_TILE / 2)
-	        ret[0] = (int)((position[0] + (HALF_TILE - distInX)) / TILE_SIZE);
-	      else
-	        ret[0] = (int)((position[0] - distInX)/TILE_SIZE);
-	    
-	    if (distInY > HALF_TILE / 2)
-	        ret[1] = (int)((position[1] + (HALF_TILE - distInY)) / TILE_SIZE);
-	      else
-	        ret[1] = (int)((position[1] - distInY)/TILE_SIZE);
-	    
-	    return ret;
-	  
   }
   
   /**
@@ -587,7 +564,7 @@ public class Navigation implements Runnable {
     return convertDistance(radius, Math.PI * width * angle / 360.0);
   }
   
-  private enum Direction {
+  public enum Direction {
     INIT, NORTH, EAST, SOUTH, WEST;
   }
 
