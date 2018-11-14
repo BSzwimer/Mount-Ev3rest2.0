@@ -12,6 +12,7 @@ import ca.mcgill.ecse211.mountev3rest.sensor.LightPoller;
 import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
 import ca.mcgill.ecse211.mountev3rest.sensor.UltrasonicPoller;
 import ca.mcgill.ecse211.mountev3rest.util.ArmController;
+import ca.mcgill.ecse211.mountev3rest.util.CoordinateMap;
 import lejos.hardware.Button;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
@@ -52,6 +53,7 @@ public class DomainController {
   private static final boolean TRAJECTORY_CORRECTION = true;
 
   // Attributes
+  CoordinateMap map;
   Odometer odometer;
   Navigation navigation;
   Localizer localizer;
@@ -83,7 +85,9 @@ public class DomainController {
    * @see LightPoller
    * @see UltrasonicPoller
    */
-  public DomainController() throws OdometerException, PollerException {
+  public DomainController(CoordinateMap map) throws OdometerException, PollerException {
+	  
+	this.map = map;
 
     // Get motor objects
     leftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("D"));
@@ -122,56 +126,63 @@ public class DomainController {
    * 
    * @see Localizer
    */
-  public void localize(int startingCorner) {
-    localizer.localize(0, 8, 8);
+  public void localize() {
+    localizer.localize(map.StartCorner, map.LL_x, map.LL_y, map.UR_x, map.UR_y);
   }
 
   /**
    * Crosses the tunnel specified by the given coordinates. The method makes sure that the robot
    * reaches the closest entrance of the tunnel, then it moves through it until the robot is
    * completely outside on the other side.
-   * 
-   * @param BR_LL_x Lower left X coordinate of the tunnel.
-   * @param BR_LL_y Lower left Y coordinate of the tunnel.
-   * @param BR_UR_x Upper right X coordinate of the tunnel.
-   * @param BR_UR_y Upper right Y coordinate of the tunnel.
    */
-  public void crossTunnel(int BR_LL_x, int BR_LL_y, int BR_UR_x, int BR_UR_y) {
-    double LL_dist = navigation.computeDistance(BR_LL_x, BR_LL_y);
-    double UR_dist = navigation.computeDistance(BR_UR_x, BR_UR_y);
+  public void crossTunnel() {
+    double LL_dist = navigation.computeDistance(map.TN_LL_x, map.TN_LL_y);
+    double UR_dist = navigation.computeDistance(map.TN_UR_x, map.TN_UR_y);
 
     boolean wasEnabled = navigation.isCorrectionEnabled();
 
-    if (BR_UR_x - BR_LL_x == 2) { // Bridge is placed horizontally.
+    if (map.TN_UR_x - map.TN_LL_x == 2) { // Bridge is placed horizontally.
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
-        navigation.travelTo(BR_LL_x - 1, BR_LL_y + 0.5);
+        navigation.travelToX(map.TN_LL_x - 1);
         navigation.waitNavigation();
-        navigation.travelTo(BR_LL_x - 0.5, BR_LL_y + 0.5);
+        navigation.travelToY(map.TN_LL_y + 0.5);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_LL_x - 0.5);
         navigation.waitNavigation();
         navigation.disableCorrection();
-        navigation.travelTo(BR_UR_x + 1, BR_UR_y - 0.5);
+        navigation.travelToX(map.TN_UR_x + 1);
         navigation.waitNavigation();
       } else { // Robot is closer to the upper right corner.
-        navigation.travelTo(BR_UR_x + 1, BR_UR_y - 0.5);
+        navigation.travelToX(map.TN_UR_x + 1);
         navigation.waitNavigation();
-        navigation.travelTo(BR_UR_x + 0.5, BR_UR_y - 0.5);
+        navigation.travelToY(map.TN_UR_y - 0.5);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_UR_x + 0.5);
         navigation.waitNavigation();
         navigation.disableCorrection();
-        navigation.travelTo(BR_LL_x - 1, BR_LL_y + 0.5);
+        navigation.travelToX(map.TN_LL_x - 1);
         navigation.waitNavigation();
       }
     } else { // Bridge is placed vertically.
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
-        navigation.travelTo(BR_LL_x + 0.5, BR_LL_y - 1);
+        navigation.travelToY(map.TN_LL_y - 1);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_LL_x + 0.5);
+        navigation.waitNavigation();
+        navigation.travelToY(map.TN_LL_y - 0.5);
         navigation.waitNavigation();
         navigation.disableCorrection();
-        navigation.travelTo(BR_UR_x - 0.5, BR_UR_y + 1);
+        navigation.travelToY(map.TN_UR_y + 1);
         navigation.waitNavigation();
       } else { // Robot is closer to the upper right corner.
-        navigation.travelTo(BR_UR_x - 0.5, BR_UR_y + 1);
+        navigation.travelToY(map.TN_UR_y + 1);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_UR_x - 0.5);
+        navigation.waitNavigation();
+        navigation.travelToY(map.TN_UR_y + 0.5);
         navigation.waitNavigation();
         navigation.disableCorrection();
-        navigation.travelTo(BR_LL_x + 0.5, BR_LL_y - 1);
+        navigation.travelToY(map.TN_LL_y - 1);
         navigation.waitNavigation();
       }
     }
@@ -218,7 +229,7 @@ public class DomainController {
    * @see ColorDetector
    * @see ArmController
    */
-  public int grabRings(int lastRingFound) {
+  public int grabRings() {
 	boolean wasEnabled = navigation.isCorrectionEnabled();
 	navigation.disableCorrection();
     armController.getRing();
@@ -253,7 +264,7 @@ public class DomainController {
     Thread disThread = new Thread(display);
     disThread.start();
 
-    localizer.localize(startCorner, 8, 8);
+    //localizer.localize(startCorner, 8, 8);
     // navigation.travelTo(0, 1);
     // navigation.waitNavigation();
     /*navigation.travelTo(4, 1);
@@ -276,11 +287,11 @@ public class DomainController {
     Button.waitForAnyPress();*/
 
     odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
-    crossTunnel(2, 3, 4, 4);
+    crossTunnel();
     localizer.tunnelLocalization();
     navigation.travelTo(5, 5);
     navigation.waitNavigation();
-    grabRings(0);
+    //grabRings(0);
 
   }
 

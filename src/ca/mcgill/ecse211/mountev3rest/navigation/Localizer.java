@@ -162,9 +162,9 @@ public class Localizer {
    * @param startingCorner Starting corner of the robot on the grid.
    * 
    */
-  public void localize(int startingCorner, int xLim, int yLim) {
+  public void localize(long startingCorner, long LL_x, long LL_y, long UR_x, long UR_y) {
     ultrasonicLocalization(startingCorner);
-    lightLocalization(startingCorner, xLim, yLim);
+    lightLocalization(startingCorner, LL_x, LL_y, UR_x, UR_y);
   }
 
   /**
@@ -175,7 +175,7 @@ public class Localizer {
    * @param startingCorner Starting corner of the robot on the grid.
    * 
    */
-  private void ultrasonicLocalization(int startingCorner) {
+  private void ultrasonicLocalization(long startingCorner) {
     boolean wasEnabled = navigation.isCorrectionEnabled();
     navigation.disableCorrection();
 
@@ -228,7 +228,7 @@ public class Localizer {
     correctAngle();
 
     // Adjust to starting position
-    switch (startingCorner) {
+    switch ((int)startingCorner) {
       case 0:
         break;
       case 1:
@@ -265,7 +265,7 @@ public class Localizer {
    * @param refX X coordinate of the reference corner.
    * @param refY Y coordinate of the reference corner.
    */
-  public void lightLocalization(int startingCorner, int xLim, int yLim) {
+  public void lightLocalization(long startingCorner, long LL_x, long LL_y, long UR_x, long UR_y) {
     boolean wasEnabled = navigation.isCorrectionEnabled();
     navigation.disableCorrection();
 
@@ -315,18 +315,18 @@ public class Localizer {
         Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]),
         false);
 
-    switch (startingCorner) {
+    switch ((int)startingCorner) {
       case 0:
-        odometer.update(TILE_SIZE, TILE_SIZE, 0);
+        odometer.update(TILE_SIZE * (LL_x + 1), TILE_SIZE * (LL_y + 1), 0);
         break;
       case 1:
-        odometer.update(TILE_SIZE * (xLim - 1), TILE_SIZE, 0);
+        odometer.update(TILE_SIZE * (UR_x - 1), TILE_SIZE * (LL_y + 1), 0);
         break;
       case 2:
-        odometer.update(TILE_SIZE * (xLim - 1), TILE_SIZE * (yLim - 1), 0);
+        odometer.update(TILE_SIZE * (UR_x - 1), TILE_SIZE * (UR_y - 1), 0);
         break;
       case 3:
-        odometer.update(TILE_SIZE, TILE_SIZE * (yLim - 1), 0);
+        odometer.update(TILE_SIZE * (LL_x + 1), TILE_SIZE * (UR_y - 1), 0);
         break;
     }
 

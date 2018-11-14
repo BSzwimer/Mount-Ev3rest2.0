@@ -28,6 +28,7 @@ public class Navigation implements Runnable {
   private static final int NAVIGATION_PERIOD = 25;
   private static final int CORRECTION_TIME_LIMIT = 2200;
   private static final double TILE_SIZE = 30.48;
+  private static final int MIN_TRAVEL_DISTANCE = 1;
   private final double MOTOR_OFFSET;
   private final double SENSOR_OFFSET;
   public final double WHEEL_RADIUS;
@@ -89,8 +90,8 @@ public class Navigation implements Runnable {
     this.SENSOR_OFFSET = SENSOR_OFFSET;
 
     target = new double[2];
-    /*target[0] = -1;
-    target[1] = -1;*/
+    target[0] = -1;
+    target[1] = -1;
 
     isNavigating = false;
     directionChanged = false;
@@ -480,7 +481,7 @@ public class Navigation implements Runnable {
   /**
    * Moves the robot in the direction of the current target set in the state machine.
    */
-  private void goToTarget() {
+  /*private void goToTarget() {
     // Compute the target's absolute angle and the distance required to reach it
     double[] position = odometer.getXYT();
     double[] realTarget =
@@ -495,14 +496,40 @@ public class Navigation implements Runnable {
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.rotate((int) (convertDistance(WHEEL_RADIUS, realTarget[0]) * MOTOR_OFFSET), true);
     rightMotor.rotate(convertDistance(WHEEL_RADIUS, realTarget[0]), true);
-  }
+  }*/
   
-  /*private void goToTarget() {
+  private void goToTarget() {
 	  double[] position = odometer.getXYT();
 	  if (target[0] != -1) {
-		  double dist = 
+		  double dist = position[0] - target[0] * TILE_SIZE;
+		  if (Math.abs(dist) < MIN_TRAVEL_DISTANCE) {
+			  return;
+		  }
+		  if (dist < 0) {
+			  turnTo(270);
+			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
+			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), false);
+		  } else {
+			  turnTo(90);
+			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
+			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), false);
+		  }
+	  } else if (target[1] != -1) {
+		  double dist = position[1] - target[1] * TILE_SIZE;
+		  if (Math.abs(dist) < MIN_TRAVEL_DISTANCE) {
+			  return;
+		  }
+		  if (dist < 0) {
+			  turnTo(180);
+			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
+			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), false);
+		  } else {
+			  turnTo(0);
+			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
+			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), false);
+		  }
 	  }
-  }*/
+  }
 
   /**
    * Computes the absolute angle and distance in centimeters required to reach the target with
