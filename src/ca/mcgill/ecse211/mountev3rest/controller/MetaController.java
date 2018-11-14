@@ -1,9 +1,13 @@
 package ca.mcgill.ecse211.mountev3rest.controller;
 
+import java.io.IOException;
+import java.util.Map;
+import org.json.simple.parser.ParseException;
+import ca.mcgill.ecse211.WiFiClient.WifiConnection;
 import ca.mcgill.ecse211.mountev3rest.navigation.OdometerException;
 import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
 import ca.mcgill.ecse211.mountev3rest.util.ArmController;
-import ca.mcgill.ecse211.mountev3rest.util.Map;
+import ca.mcgill.ecse211.mountev3rest.util.CoordinateMap;
 import lejos.hardware.Button;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
@@ -19,9 +23,9 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
  * {@code DomainController} and how the robot should react to the outcome of those calls. The
  * {@code DomainController} class in turn handles the subtleties of each subtask.
  * 
- * Additionally, the {@code MetaController} makes sure that the appropriate external conditions are met
- * before requesting that a given subtask is performed. These external conditions are defined by the
- * executor of the subtask (usually the {@code DomainController}).
+ * Additionally, the {@code MetaController} makes sure that the appropriate external conditions are
+ * met before requesting that a given subtask is performed. These external conditions are defined by
+ * the executor of the subtask (usually the {@code DomainController}).
  * 
  * @see MetaController
  * 
@@ -29,28 +33,38 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
  *
  */
 public class MetaController {
-  
+
+  // Constants
+  private static final String SERVER_IP = "192.168.2.23";
+  private static final int TEAM_NUMBER = 11;
+  private static final boolean ENABLE_DEBUG_WIFI_PRINT = true;
+
   public static void main(String[] args) throws OdometerException, PollerException {
-    double[][] points = {{3.5, 1.5}, {3.5, 3.5}};
-    
+    //CoordinateMap map = getWiFiData();
+
+    //System.out.println(String.format("Tunnel: LL[%d, %d]  UR[%d, %d]", map.TN_LL_x, map.TN_LL_y,
+    //    map.TN_UR_x, map.TN_UR_y));
+
+    //double[][] points = {{3.5, 1.5}, {3.5, 3.5}};
+
     TextLCD lcd = LocalEV3.get().getTextLCD();
-    
+
     lcd.drawString("Press any button", 0, 3);
     lcd.drawString("    to start.   ", 0, 4);
-    
+
     Button.waitForAnyPress();
-    
+
     DomainController controller = new DomainController();
-    controller.testNavigation(true, 0, points, lcd);
-    //controller.grabRings(0);
-    //controller.testColorDetection(lcd);
-    
+    // controller.testNavigation(true, 0, points, lcd);
+    // controller.grabRings(0);
+    controller.testColorDetection(lcd);
+
     System.exit(0);
   }
 
   // Attributes
   DomainController domainController;
-  Map map;
+  CoordinateMap map;
   int ringCapacity;
   int ringsLeft;
   boolean ringsIdentified;
@@ -66,8 +80,8 @@ public class MetaController {
     ringsIdentified = false;
     ringMap = new int[4][2];
 
-    //domainController = new DomainController();
-    map = new Map();
+    // domainController = new DomainController();
+    // map = new CoordinateMap();
   }
 
   /**
@@ -79,7 +93,7 @@ public class MetaController {
     // Map map = new WifiClass().getInfo();
 
     // Create controller.
-    //domainController = new DomainController();
+    // domainController = new DomainController();
 
 
     // START RING SEARCH ROUTINE
@@ -95,6 +109,19 @@ public class MetaController {
      * ringsLeft -= ringCapacity; }
      */
 
+  }
+
+  @SuppressWarnings("rawtypes")
+  private static CoordinateMap getWiFiData() {
+    WifiConnection conn = new WifiConnection(SERVER_IP, TEAM_NUMBER, ENABLE_DEBUG_WIFI_PRINT);
+    Map data = null;
+    try {
+      data = conn.getData();
+    } catch (IOException | ParseException e) {
+      e.printStackTrace();
+    }
+
+    return new CoordinateMap(data, TEAM_NUMBER);
   }
 
 }

@@ -86,7 +86,7 @@ public class Localizer {
    * 
    */
   public void localize(int startingCorner, int xLim, int yLim) {
-    //ultrasonicLocalization(startingCorner);
+    ultrasonicLocalization(startingCorner);
     lightLocalization(startingCorner, xLim, yLim);
   }
 
@@ -164,6 +164,8 @@ public class Localizer {
         odometer.update(0, 0, 90);
         break;
     }
+    
+    odometer.update(0, 0, 180);
     
     if (wasEnabled)
       navigation.enableCorrection();
