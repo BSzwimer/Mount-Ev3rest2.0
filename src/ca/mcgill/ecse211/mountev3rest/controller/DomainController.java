@@ -256,7 +256,6 @@ public class DomainController {
     //localizer.localize(startCorner, 8, 8);
     // navigation.travelTo(0, 1);
     // navigation.waitNavigation();
-    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
     /*navigation.travelTo(4, 1);
     navigation.waitNavigation();
     
@@ -276,7 +275,9 @@ public class DomainController {
     
     Button.waitForAnyPress();*/
 
+    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
     crossTunnel(2, 3, 4, 4);
+    localizer.tunnelLocalization();
     navigation.travelTo(5, 5);
     navigation.waitNavigation();
     grabRings(0);

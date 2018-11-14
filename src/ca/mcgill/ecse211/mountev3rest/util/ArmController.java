@@ -1,9 +1,7 @@
 package ca.mcgill.ecse211.mountev3rest.util;
 
 import javax.swing.undo.UndoableEditSupport;
-
 import org.omg.CORBA.Current;
-
 import ca.mcgill.ecse211.mountev3rest.navigation.Navigation;
 import ca.mcgill.ecse211.mountev3rest.sensor.ColorDetector;
 import ca.mcgill.ecse211.mountev3rest.sensor.LightPoller;
@@ -92,7 +90,7 @@ public class ArmController {
    */
   public void getRing() {
 
-     
+
     armMotor.setSpeed(50);
     armMotor.rotate(100, false);
 
@@ -102,7 +100,6 @@ public class ArmController {
 
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), false);
-    
 
     boolean changeDirection = true; 
     while (true) {
@@ -132,55 +129,54 @@ public class ArmController {
     		if (counter>= 6) {
     			break; 
     		}
-    	
+
     }
-    
-    
-    
-//	  while (true) {
-//			
-//			int counter = 0; 
-//			colorSensorMotor.setSpeed(20);
-//
-//			boolean goingUp = true;
-//			if (goingUp) {
-//				colorSensorMotor.rotate(50);
-//				goingUp = false;
-//			} else {
-//				colorSensorMotor.rotate(-50);
-//				goingUp = true;
-//			}
-//
-//			int currentColor = 0;
-//
-//			while (colorSensorMotor.isMoving()) {
-//
-//				currentColor = colorDetector.getColor();
-//				if (currentColor != 0) {
-//					break;
-//				}
-//				
-//				try {
-//					Thread.sleep(20);
-//				} catch (InterruptedException e) {
-//					
-//					e.printStackTrace();
-//				}
-//			}
-//			
-//			counter++;
-//			if (counter>=6)
-//			{
-//				break; 
-//			}
-//
-//		}
-     
-    
+
+
+
+    // while (true) {
+    //
+    // int counter = 0;
+    // colorSensorMotor.setSpeed(20);
+    //
+    // boolean goingUp = true;
+    // if (goingUp) {
+    // colorSensorMotor.rotate(50);
+    // goingUp = false;
+    // } else {
+    // colorSensorMotor.rotate(-50);
+    // goingUp = true;
+    // }
+    //
+    // int currentColor = 0;
+    //
+    // while (colorSensorMotor.isMoving()) {
+    //
+    // currentColor = colorDetector.getColor();
+    // if (currentColor != 0) {
+    // break;
+    // }
+    //
+    // try {
+    // Thread.sleep(20);
+    // } catch (InterruptedException e) {
+    //
+    // e.printStackTrace();
+    // }
+    // }
+    //
+    // counter++;
+    // if (counter>=6)
+    // {
+    // break;
+    // }
+    //
+    // }
+
 
 
     // not tested yet, however much we want to open up the arm before approaching the tree
-   
+
 
     // should be infront of the tree
     armMotor.setSpeed(50);

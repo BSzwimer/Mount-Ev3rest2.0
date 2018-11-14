@@ -73,9 +73,78 @@ public class Localizer {
     this.SENSOR_OFFSET = SENSOR_OFFSET;
     this.TILE_SIZE = TILE_SIZE;
   }
-  
+
   public void tunnelLocalization() {
-	  
+    double[] position;
+
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);
+
+    leftMotor.forward();
+    rightMotor.forward();
+
+    findLine();
+    position = odometer.getXYT();
+    int currentLine = navigation.estimateCurrentLine();
+    switch (navigation.direction) {
+      case NORTH:
+        odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
+        break;
+      case EAST:
+        odometer.setXYT((currentLine * TILE_SIZE) + SENSOR_OFFSET, position[1], 90);
+        break;
+      case SOUTH:
+        odometer.setXYT(position[0], (currentLine * TILE_SIZE) - SENSOR_OFFSET, 180);
+        break;
+      case WEST:
+        odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
+        break;
+    }
+    
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);
+    
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
+    
+    navigation.turnTo(odometer.getXYT()[2] + 90);
+    
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);
+
+    leftMotor.forward();
+    rightMotor.forward();
+    
+    try {
+      Thread.sleep(500);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+
+    findLine();
+    position = odometer.getXYT();
+    currentLine = navigation.estimateCurrentLine();
+    switch (navigation.direction) {
+      case NORTH:
+        odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
+        break;
+      case EAST:
+        odometer.setXYT((currentLine * TILE_SIZE) + SENSOR_OFFSET, position[1], 90);
+        break;
+      case SOUTH:
+        odometer.setXYT(position[0], (currentLine * TILE_SIZE) - SENSOR_OFFSET, 180);
+        break;
+      case WEST:
+        odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
+        break;
+    }
+    
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);
+    
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
+
   }
 
   /**
@@ -106,7 +175,7 @@ public class Localizer {
   private void ultrasonicLocalization(int startingCorner) {
     boolean wasEnabled = navigation.isCorrectionEnabled();
     navigation.disableCorrection();
-    
+
     long updateStart, updateEnd;
     prevDistance = -1;
     boolean firstSearch = true;
@@ -169,7 +238,7 @@ public class Localizer {
         odometer.update(0, 0, 90);
         break;
     }
-    
+
     if (wasEnabled)
       navigation.enableCorrection();
 
@@ -201,7 +270,7 @@ public class Localizer {
     navigation.turnTo(0);
 
     double[] initialPosition = odometer.getXYT();
-    
+
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.forward();
@@ -210,17 +279,21 @@ public class Localizer {
     findLine();
     double[] currPosition = odometer.getXYT();
     odometer.setXYT(currPosition[0], SENSOR_OFFSET, 0);
-    
+
     leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);  
-    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]), true);
-    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]), false);
-    
+    rightMotor.setSpeed(FORWARD_SPEED);
+    leftMotor.rotate(
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]),
+        true);
+    rightMotor.rotate(
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]),
+        false);
+
     // Localize in X
     navigation.turnTo(90);
 
     initialPosition = odometer.getXYT();
-    
+
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.forward();
@@ -231,11 +304,15 @@ public class Localizer {
     odometer.setXYT(SENSOR_OFFSET, currPosition[1], 90);
 
     leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);   
-    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]), true);
-    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]), false);
-    
-    switch(startingCorner) {
+    rightMotor.setSpeed(FORWARD_SPEED);
+    leftMotor.rotate(
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]),
+        true);
+    rightMotor.rotate(
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]),
+        false);
+
+    switch (startingCorner) {
       case 0:
         odometer.update(TILE_SIZE, TILE_SIZE, 0);
         break;
@@ -243,18 +320,18 @@ public class Localizer {
         odometer.update(TILE_SIZE * (xLim - 1), TILE_SIZE, 0);
         break;
       case 2:
-        odometer.update(TILE_SIZE* (xLim - 1), TILE_SIZE * (yLim - 1), 0);
+        odometer.update(TILE_SIZE * (xLim - 1), TILE_SIZE * (yLim - 1), 0);
         break;
       case 3:
         odometer.update(TILE_SIZE, TILE_SIZE * (yLim - 1), 0);
         break;
     }
-    
+
     navigation.travelTo(1, 1);
     navigation.waitNavigation();
     navigation.turnTo(0);
     Button.waitForAnyPress();
-    
+
     if (wasEnabled)
       navigation.enableCorrection();
   }
@@ -303,8 +380,8 @@ public class Localizer {
   private void adjustTrajectory(int laggingSide) {
     boolean goBack = false;
     long startTime = System.currentTimeMillis();
-    int prevTacho = 0;  
-	  
+    int prevTacho = 0;
+
     // Correct the direction
     if (laggingSide == 0) {
       rightMotor.setSpeed(0);
@@ -314,8 +391,8 @@ public class Localizer {
         if (lightPoller.leftInLine) {
           break;
         } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
-            goBack = true;
-            break;
+          goBack = true;
+          break;
         }
         try {
           Thread.sleep(LOCALIZATION_PERIOD);
@@ -330,8 +407,8 @@ public class Localizer {
         if (lightPoller.rightInLine) {
           break;
         } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
-            goBack = true;
-            break;
+          goBack = true;
+          break;
         }
         try {
           Thread.sleep(LOCALIZATION_PERIOD);
@@ -339,14 +416,14 @@ public class Localizer {
         }
       }
     }
-    
+
     if (goBack) {
-        if (laggingSide == 0)
-          leftMotor.rotate(prevTacho - leftMotor.getTachoCount());
-        else if (laggingSide == 1)
-          rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
-        return;
-      }
+      if (laggingSide == 0)
+        leftMotor.rotate(prevTacho - leftMotor.getTachoCount());
+      else if (laggingSide == 1)
+        rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
+      return;
+    }
   }
 
   /**
