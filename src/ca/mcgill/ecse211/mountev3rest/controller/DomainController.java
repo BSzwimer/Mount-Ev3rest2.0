@@ -1,5 +1,6 @@
 package ca.mcgill.ecse211.mountev3rest.controller;
 
+import java.util.logging.Handler;
 import ca.mcgill.ecse211.mountev3rest.navigation.Display;
 import ca.mcgill.ecse211.mountev3rest.navigation.Localizer;
 import ca.mcgill.ecse211.mountev3rest.navigation.Navigation;
@@ -15,6 +16,7 @@ import lejos.hardware.Button;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
+import lejos.hardware.motor.EV3MediumRegulatedMotor;
 import lejos.hardware.sensor.EV3ColorSensor;
 import lejos.hardware.sensor.EV3GyroSensor;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
@@ -86,8 +88,8 @@ public class DomainController {
     // Get motor objects
     leftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("D"));
     rightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("A"));
-    EV3LargeRegulatedMotor armLeftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("C"));
-    EV3LargeRegulatedMotor armRightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("B"));
+    EV3MediumRegulatedMotor colorSensorMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("C"));
+    EV3MediumRegulatedMotor armMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("B"));
 
     // Instantiate the sensors
     EV3ColorSensor rightLightSensor = new EV3ColorSensor(LocalEV3.get().getPort("S1"));
@@ -99,13 +101,11 @@ public class DomainController {
     usPoller = UltrasonicPoller.getUltrasonicPoller(usSensor);
     lightPoller = LightPoller.getLightPoller(topLightSensor, leftLightSensor, rightLightSensor);
     odometer = Odometer.getOdometer(leftMotor, rightMotor, TRACK, WHEEL_RADIUS, MOTOR_OFFSET);
-    // odometryCorrector = new OdometryCorrector(TILE_SIZE, SENSOR_OFFSET_STRAIGHT);
     navigation = new Navigation(leftMotor, rightMotor, TRAJECTORY_CORRECTION, WHEEL_RADIUS, TRACK,
         MOTOR_OFFSET, SENSOR_OFFSET);
     localizer = new Localizer(leftMotor, rightMotor, navigation, SENSOR_OFFSET, TILE_SIZE);
-    //armController =
-    //    new ArmController(armLeftMotor, armRightMotor, leftMotor, rightMotor, navigation);
     colorDetector = new ColorDetector(LocalEV3.get().getTextLCD(), lightPoller);
+    armController = new ArmController(colorSensorMotor, armMotor, leftMotor, rightMotor, navigation, colorDetector);
 
     // Initialize and start the required extra threads
     odoThread = new Thread(odometer);
@@ -215,7 +215,7 @@ public class DomainController {
    * @see ArmController
    */
   public int grabRings(int lastRingFound) {
-    armController.getRing(1);
+    armController.getRing();
     return 0;
   }
 
@@ -245,19 +245,17 @@ public class DomainController {
     disThread.start();
 
     localizer.localize(startCorner, 8, 8);
-    //navigation.travelTo(0, 1);
-    //navigation.waitNavigation();
+    // navigation.travelTo(0, 1);
+    // navigation.waitNavigation();
     navigation.travelTo(4, 1);
     navigation.waitNavigation();
     navigation.travelTo(4, 5);
     navigation.waitNavigation();
 
-    /*crossTunnel(2, 3, 4, 4);
-    navigation.travelTo(6.5, 2.5);
-    navigation.waitNavigation();
-    crossTunnel(2, 3, 4, 4);
-    navigation.travelTo(1, 1);
-    navigation.waitNavigation();*/
+    /*
+     * crossTunnel(2, 3, 4, 4); navigation.travelTo(6.5, 2.5); navigation.waitNavigation();
+     * crossTunnel(2, 3, 4, 4); navigation.travelTo(1, 1); navigation.waitNavigation();
+     */
   }
 
   public void testColorDetection(TextLCD lcd) {
