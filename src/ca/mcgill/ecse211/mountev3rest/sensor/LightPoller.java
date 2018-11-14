@@ -29,38 +29,49 @@ public class LightPoller extends Thread {
 
   // SampleProvider and MeanFilter objects
   private SampleProvider frontProvider;
-  private SampleProvider lineProvider;
+  private SampleProvider leftProvider;
+  private SampleProvider rightProvider;
   private MeanFilter frontFilter;
-  private MeanFilter lineFilter;
+  private MeanFilter leftFilter;
+  private MeanFilter rightFilter;
 
   // Public attributes used to access the sensors' readings
   public float[] front;
-  public float[] line;
+  public float[] left;
+  public float[] right;
   public float[] frontMean;
-  public float[] lineMean;
+  public float[] leftMean;
+  public float[] rightMean;
 
   // Public attributes to access line detection results for line and right sensors
-  public boolean inLine;
-  public int lineDetections;
+  public boolean leftInLine;
+  public boolean rightInLine;
 
   /**
    * Creates a light poller that uses the provided sensors for polling.
    * 
    * @param frontSensor
-   * @param lineSensor
+   * @param leftSensor
    */
-  private LightPoller(EV3ColorSensor frontSensor, EV3ColorSensor lineSensor) {
+  private LightPoller(EV3ColorSensor frontSensor, EV3ColorSensor leftSensor,
+      EV3ColorSensor rightSensor) {
     // Initialize front sensor values
     frontProvider = frontSensor.getMode("RGB");
     frontFilter = new MeanFilter(frontProvider, 4);
     front = new float[frontProvider.sampleSize()];
     frontMean = new float[frontFilter.sampleSize()];
 
-    // Initialize line sensor values
-    lineProvider = lineSensor.getMode("Red");
-    lineFilter = new MeanFilter(lineProvider, 3);
-    line = new float[lineProvider.sampleSize()];
-    lineMean = new float[lineFilter.sampleSize()];
+    // Initialize left sensor values
+    leftProvider = leftSensor.getMode("Red");
+    leftFilter = new MeanFilter(leftProvider, 3);
+    left = new float[leftProvider.sampleSize()];
+    leftMean = new float[leftFilter.sampleSize()];
+
+    // Initialize right sensor values
+    rightProvider = rightSensor.getMode("Red");
+    rightFilter = new MeanFilter(rightProvider, 3);
+    right = new float[rightProvider.sampleSize()];
+    rightMean = new float[rightFilter.sampleSize()];
   }
 
   /**
@@ -69,14 +80,14 @@ public class LightPoller extends Thread {
    * {@code LightPoller} class.
    * 
    * @param frontSensor Light sensor placed on the robot arm, set to {@code RGB} mode.
-   * @param lineSensor Light sensor placed to the left of the robot's center, set to {@code Red}
+   * @param leftSensor Light sensor placed to the left of the robot's center, set to {@code Red}
    *        mode.
    * 
    * @return New or existing instance of the {@code LightPoller} object.
    */
-  public static LightPoller getLightPoller(EV3ColorSensor frontSensor, EV3ColorSensor lineSensor) {
+  public static LightPoller getLightPoller(EV3ColorSensor frontSensor, EV3ColorSensor leftSensor, EV3ColorSensor rightSensor) {
     if (lightPoller == null) {
-      lightPoller = new LightPoller(frontSensor, lineSensor);
+      lightPoller = new LightPoller(frontSensor, leftSensor, rightSensor);
       return lightPoller;
     } else {
       return lightPoller;
@@ -107,9 +118,13 @@ public class LightPoller extends Thread {
       frontProvider.fetchSample(front, 0);
       frontFilter.fetchSample(frontMean, 0);
 
-      // Line sensor
-      lineProvider.fetchSample(line, 0);
-      lineFilter.fetchSample(lineMean, 0);
+      // Left sensor
+      leftProvider.fetchSample(left, 0);
+      leftFilter.fetchSample(leftMean, 0);
+      
+      // Right sensor
+      rightProvider.fetchSample(right, 0);
+      rightFilter.fetchSample(rightMean, 0);
 
       // Update line detection values
       lineDetection();
@@ -125,13 +140,20 @@ public class LightPoller extends Thread {
    * Updates the line detection values for the line sensor.
    */
   private void lineDetection() {
-    if (lineMean[0] < LINE_COLOR_VALUE) {
-      if (!inLine) {
-        inLine = true;
-        lineDetections++;
+    if (leftMean[0] < LINE_COLOR_VALUE) {
+      if (!leftInLine) {
+        leftInLine = true;
       }
     } else {
-      inLine = false;
+      leftInLine = false;
+    }
+    
+    if (rightMean[0] < LINE_COLOR_VALUE) {
+      if (!rightInLine) {
+        rightInLine = true;
+      }
+    } else {
+      rightInLine = false;
     }
   }
 

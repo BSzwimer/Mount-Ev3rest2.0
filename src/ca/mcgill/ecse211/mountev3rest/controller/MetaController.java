@@ -38,11 +38,11 @@ public class MetaController {
     lcd.drawString("Press any button", 0, 3);
     lcd.drawString("    to start.   ", 0, 4);
     
-    //Button.waitForAnyPress();
+    Button.waitForAnyPress();
     
     DomainController controller = new DomainController();
-    //controller.testNavigation(true, 0, points, lcd);
-    controller.grabRings(0);
+    controller.testNavigation(true, 0, points, lcd);
+    //controller.grabRings(0);
     //controller.testColorDetection(lcd);
     
     System.exit(0);

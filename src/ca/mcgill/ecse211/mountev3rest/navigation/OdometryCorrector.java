@@ -61,7 +61,7 @@ public class OdometryCorrector extends Thread {
   @Override
   public void run() {
     while(true) {
-      if (lightPoller.inLine) {
+      if (lightPoller.leftInLine) {
         if (!inLine) {
           if (canCorrect() && enableCorrection) {
             updateDirection();

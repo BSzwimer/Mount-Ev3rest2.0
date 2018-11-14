@@ -170,7 +170,7 @@ public class ColorDetector {
     while (true) {
       correctionStart = System.currentTimeMillis();
 
-      double L = lightPoller.lineMean[0];
+      double L = lightPoller.leftMean[0];
 
       System.out.println(L);
 

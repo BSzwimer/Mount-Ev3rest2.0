@@ -1,8 +1,6 @@
 package ca.mcgill.ecse211.mountev3rest.navigation;
 
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
-import lejos.hardware.sensor.EV3GyroSensor;
-import lejos.robotics.SampleProvider;
 
 /**
  * Uses the measurements of the wheel radius, tacho meter readings and gyro sensor angle readings to
@@ -14,6 +12,7 @@ import lejos.robotics.SampleProvider;
 public class Odometer extends OdometerData implements Runnable {
 
   // Constants
+  private final double TRACK;
   private final double WHEEL_RAD;
   private final double MOTOR_OFFSET;
   private static final long ODOMETER_PERIOD = 25;
@@ -30,10 +29,6 @@ public class Odometer extends OdometerData implements Runnable {
   private EV3LargeRegulatedMotor leftMotor;
   private EV3LargeRegulatedMotor rightMotor;
 
-  private SampleProvider gyroSensor;
-  private float[] gyroSample;
-  private float prevGyroSample;
-
   /**
    * This is the default constructor of this class. It initiates all motors and variables once.It
    * cannot be accessed externally.
@@ -41,22 +36,19 @@ public class Odometer extends OdometerData implements Runnable {
    * @param leftMotor
    * @param rightMotor
    * @param gyroSensor
+   * @param TRACK
    * @param WHEEL_RAD
    * @param MOTOR_OFFSET
    * 
    * @throws OdometerException
    */
   private Odometer(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
-      EV3GyroSensor gyroSensor, final double WHEEL_RAD, final double MOTOR_OFFSET)
+      final double TRACK, final double WHEEL_RAD, final double MOTOR_OFFSET)
       throws OdometerException {
     odoData = OdometerData.getOdometerData(); // Allows access to x,y,z
                                               // manipulation methods
     this.leftMotor = leftMotor;
     this.rightMotor = rightMotor;
-
-    this.gyroSensor = gyroSensor.getAngleMode();
-    this.gyroSample = new float[this.gyroSensor.sampleSize()];
-    this.prevGyroSample = 0;
 
     // Reset the values of x, y and z to 0
     odoData.setXYT(0, 0, 0);
@@ -64,6 +56,7 @@ public class Odometer extends OdometerData implements Runnable {
     this.leftMotorTachoCount = 0;
     this.rightMotorTachoCount = 0;
 
+    this.TRACK = TRACK;
     this.WHEEL_RAD = WHEEL_RAD;
     this.MOTOR_OFFSET = MOTOR_OFFSET;
   }
@@ -83,12 +76,12 @@ public class Odometer extends OdometerData implements Runnable {
    *         object.
    */
   public synchronized static Odometer getOdometer(EV3LargeRegulatedMotor leftMotor,
-      EV3LargeRegulatedMotor rightMotor, EV3GyroSensor gyroSensor, final double WHEEL_RADIUS,
+      EV3LargeRegulatedMotor rightMotor, final double TRACK, final double WHEEL_RADIUS,
       double MOTOR_OFFSET) throws OdometerException {
     if (odo != null) { // Return existing object
       return odo;
     } else { // create object and return it
-      odo = new Odometer(leftMotor, rightMotor, gyroSensor, WHEEL_RADIUS, MOTOR_OFFSET);
+      odo = new Odometer(leftMotor, rightMotor, TRACK, WHEEL_RADIUS, MOTOR_OFFSET);
       return odo;
     }
   }
@@ -129,8 +122,7 @@ public class Odometer extends OdometerData implements Runnable {
       double distL = Math.PI * WHEEL_RAD * (leftMotorTachoCount - prevLeftMotorTachoCount) / 180;
       double distR = Math.PI * WHEEL_RAD * (rightMotorTachoCount - prevRightMotorTachoCount) / 180;
       double deltaD = 0.5 * (distL + distR);
-      gyroSensor.fetchSample(gyroSample, 0);
-      double deltaT = -1 * (gyroSample[0] - prevGyroSample);
+      double deltaT = Math.toDegrees((distL - distR) / TRACK);
 
       // Get the current odometer values
       double deltaX = deltaD * Math.sin(Math.toRadians(position[2] + deltaT));
@@ -142,7 +134,6 @@ public class Odometer extends OdometerData implements Runnable {
       // Set current values to be the old values
       prevLeftMotorTachoCount = leftMotorTachoCount;
       prevRightMotorTachoCount = rightMotorTachoCount;
-      prevGyroSample = gyroSample[0];
 
       // this ensures that the odometer only runs once every period
       updateEnd = System.currentTimeMillis();
@@ -154,17 +145,6 @@ public class Odometer extends OdometerData implements Runnable {
         }
       }
     }
-  }
-
-  /**
-   * Provides access to the raw angle reading of the gyro sensor.
-   * 
-   * @return Gyro raw sensor reading in degrees.
-   */
-  public float pollGyro() {
-    float[] sample = new float[gyroSensor.sampleSize()];
-    gyroSensor.fetchSample(sample, 0);
-    return sample[0];
   }
 
 }

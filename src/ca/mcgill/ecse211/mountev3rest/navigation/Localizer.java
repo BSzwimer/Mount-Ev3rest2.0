@@ -23,15 +23,13 @@ public class Localizer {
   // Constants
   private static final int LOCALIZATION_PERIOD = 25;
   private static final int ROTATE_SPEED = 80;
+  private static final int FORWARD_SPEED = 100;
   private static final int THRESHOLD = 45;
-  private static final double HALF_TILE_APPROX = 0.5;
   private final double SENSOR_OFFSET;
-  private final double SENSOR_OFFSET_ANGLE;
   private final double TILE_SIZE;
 
   // Object Attributes
   private Odometer odometer;
-  private OdometryCorrector corrector;
   private UltrasonicPoller usPoller;
   private LightPoller lightPoller;
   private Navigation navigation;
@@ -61,19 +59,17 @@ public class Localizer {
    * @see Odometer
    */
   public Localizer(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
-      Navigation navigation, OdometryCorrector corrector, final double SENSOR_OFFSET, final double SENSOR_OFFSET_ANGLE,
-      final double TILE_SIZE) throws OdometerException, PollerException {
+      Navigation navigation, final double SENSOR_OFFSET, final double TILE_SIZE)
+      throws OdometerException, PollerException {
     usPoller = UltrasonicPoller.getUltrasonicPoller();
     lightPoller = LightPoller.getLightPoller();
     odometer = Odometer.getOdometer();
-    this.corrector = corrector;
 
     this.navigation = navigation;
     this.leftMotor = leftMotor;
     this.rightMotor = rightMotor;
 
     this.SENSOR_OFFSET = SENSOR_OFFSET;
-    this.SENSOR_OFFSET_ANGLE = SENSOR_OFFSET_ANGLE;
     this.TILE_SIZE = TILE_SIZE;
   }
 
@@ -90,31 +86,8 @@ public class Localizer {
    * 
    */
   public void localize(int startingCorner, int xLim, int yLim) {
-    ultrasonicLocalization(startingCorner);
-
-    // Determine the reference point for light localization based on the starting corner.
-    int refX = 0, refY = 0;
-    switch(startingCorner) {
-      case 0:
-        refX = 1;
-        refY = 1;
-        break;
-      case 1:
-        refX = xLim - 1;
-        refY = 1;
-        break;
-      case 2:
-        refX = xLim - 1;
-        refY = yLim - 1;
-        break;
-      case 3:
-        refX = 1;
-        refY = yLim - 1;
-        break;
-    }
-    
-    lightLocalization(startingCorner, refX, refY);
-    navigation.setLocation(refX, refY);
+    //ultrasonicLocalization(startingCorner);
+    lightLocalization(startingCorner, xLim, yLim);
   }
 
   /**
@@ -126,6 +99,9 @@ public class Localizer {
    * 
    */
   private void ultrasonicLocalization(int startingCorner) {
+    boolean wasEnabled = navigation.isCorrectionEnabled();
+    navigation.disableCorrection();
+    
     long updateStart, updateEnd;
     prevDistance = -1;
     boolean firstSearch = true;
@@ -173,7 +149,7 @@ public class Localizer {
       }
     }
     correctAngle();
-    
+
     // Adjust to starting position
     switch (startingCorner) {
       case 0:
@@ -189,6 +165,9 @@ public class Localizer {
         break;
     }
     
+    if (wasEnabled)
+      navigation.enableCorrection();
+
   }
 
   /**
@@ -209,113 +188,139 @@ public class Localizer {
    * @param refX X coordinate of the reference corner.
    * @param refY Y coordinate of the reference corner.
    */
-  public void lightLocalization(int referenceCorner, int refX, int refY) {
-    boolean inLine = false;
-    int lineDetections = 0;
-    double[] angleDetectionRaw = new double[4]; // Array to store the angle detections
-    double[] angleDetection = new double[4];
-    int approxAngle = -1;
+  public void lightLocalization(int startingCorner, int xLim, int yLim) {
+    boolean wasEnabled = navigation.isCorrectionEnabled();
+    navigation.disableCorrection();
 
-    // Assume the robot is around the middle of the tile, move towards the closest corner.
-    switch (referenceCorner) {
-      case 0:
-        approxAngle = 45;
-        break;
-      case 1:
-        approxAngle = 315;
-        break;
-      case 2:
-        approxAngle = 225;
-        break;
-      case 3:
-        approxAngle = 135;
-        break;
-    }
+    // Localize in Y
+    navigation.turnTo(0);
 
-    boolean wasEnabled = corrector.isEnabled();
-    corrector.disable();
+    double[] initialPosition = odometer.getXYT();
     
-    navigation.turnTo(approxAngle);
-
-    leftMotor.setSpeed(ROTATE_SPEED);
-    rightMotor.setSpeed(ROTATE_SPEED);
-    leftMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, TILE_SIZE * HALF_TILE_APPROX), true);
-    rightMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, TILE_SIZE * HALF_TILE_APPROX), false);
-
-    // Rotate counter-clockwise and record 4 angles at line detections. 205, 110
-    leftMotor.backward();
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);
+    leftMotor.forward();
     rightMotor.forward();
 
-    while (lineDetections < 4) {
-      if (lightPoller.inLine) {
-        if (!inLine) {
-          Sound.beep();
-          angleDetectionRaw[lineDetections] = odometer.pollGyro();
-          angleDetection[lineDetections] = odometer.getXYT()[2];
-          lineDetections++;
-          inLine = true;
-        }
-      } else {
-        inLine = false;
-      }
-    }
-
-    leftMotor.setSpeed(0);
-    rightMotor.setSpeed(0);
-
-    // Correct the odometer using the angles of the line detections.
-    double nX = angleDetectionRaw[3]; // Negative X intersection
-    double pX = angleDetectionRaw[1]; // Positive X intersection
-    double nY = angleDetectionRaw[0]; // Negative Y intersection
-    double pY = angleDetectionRaw[2]; // Positive Y intersection
-
-    double thetaY = pY - nY;
-    double thetaX = nX - pX;
-
-    double correctedX = 0;
-    double correctedY = 0;
-    double thetaXError = 0;
-    double thetaYError = 0;
-    double averageThetaError = 0;
+    findLine();
+    double[] currPosition = odometer.getXYT();
+    odometer.setXYT(currPosition[0], SENSOR_OFFSET, 0);
     
-    switch (referenceCorner) {
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);  
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]), false);
+    
+    // Localize in X
+    navigation.turnTo(90);
+
+    initialPosition = odometer.getXYT();
+    
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);
+    leftMotor.forward();
+    rightMotor.forward();
+
+    findLine();
+    currPosition = odometer.getXYT();
+    odometer.setXYT(SENSOR_OFFSET, currPosition[1], 90);
+
+    leftMotor.setSpeed(FORWARD_SPEED);
+    rightMotor.setSpeed(FORWARD_SPEED);   
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]), false);
+    
+    switch(startingCorner) {
       case 0:
-        correctedX = TILE_SIZE * refX - SENSOR_OFFSET * Math.cos(Math.toRadians(thetaY) / 2);
-        correctedY = TILE_SIZE * refY - SENSOR_OFFSET * Math.cos(Math.toRadians(thetaX) / 2);
-        thetaXError = 180 - (thetaX / 2) + SENSOR_OFFSET_ANGLE - angleDetection[3];
-        thetaYError = 270 - (thetaY / 2) + SENSOR_OFFSET_ANGLE - angleDetection[2];
-        averageThetaError = (thetaXError + thetaYError) / 2;
+        odometer.update(TILE_SIZE, TILE_SIZE, 0);
         break;
       case 1:
-        correctedY = TILE_SIZE * refY - SENSOR_OFFSET * Math.cos(Math.toRadians(thetaY) / 2);
-        correctedX = TILE_SIZE * refX + SENSOR_OFFSET * Math.cos(Math.toRadians(thetaX) / 2); 
-        thetaXError = 90 - (thetaX / 2) + SENSOR_OFFSET_ANGLE - angleDetection[3];
-        thetaYError = 180 - (thetaY / 2) + SENSOR_OFFSET_ANGLE - angleDetection[2];
-        averageThetaError = (thetaXError + thetaYError) / 2;
+        odometer.update(TILE_SIZE * (xLim - 1), TILE_SIZE, 0);
         break;
       case 2:
-        correctedX = TILE_SIZE * refX + SENSOR_OFFSET * Math.cos(Math.toRadians(thetaY) / 2);
-        correctedY = TILE_SIZE * refY + SENSOR_OFFSET * Math.cos(Math.toRadians(thetaX) / 2);
-        thetaXError = 360 - (thetaX / 2) + SENSOR_OFFSET_ANGLE - angleDetection[3];
-        thetaYError = 90 - (thetaY / 2) + SENSOR_OFFSET_ANGLE - angleDetection[2];
-        averageThetaError = (thetaXError + thetaYError) / 2;
+        odometer.update(TILE_SIZE* (xLim - 1), TILE_SIZE * (yLim - 1), 0);
         break;
       case 3:
-        correctedY = TILE_SIZE * refY + SENSOR_OFFSET * Math.cos(Math.toRadians(thetaY) / 2);
-        correctedX = TILE_SIZE * refX - SENSOR_OFFSET * Math.cos(Math.toRadians(thetaX) / 2);
-        thetaXError = 270 - (thetaX / 2) + SENSOR_OFFSET_ANGLE - angleDetection[3];
-        thetaYError = 360 - (thetaY / 2) + SENSOR_OFFSET_ANGLE - angleDetection[2];
-        averageThetaError = (thetaXError + thetaYError) / 2;
+        odometer.update(TILE_SIZE, TILE_SIZE * (yLim - 1), 0);
         break;
     }
-
-    odometer.setXYT(correctedX, correctedY, angleDetection[3]);
-    odometer.update(0, 0, averageThetaError);
+    
+    navigation.travelTo(1, 1);
+    navigation.waitNavigation();
+    navigation.turnTo(0);
+    Button.waitForAnyPress();
     
     if (wasEnabled)
-      corrector.enable();
+      navigation.enableCorrection();
+  }
+
+  /**
+   * TODO
+   */
+  private void findLine() {
+    boolean leftInLine = false;
+    boolean rightInLine = true;
+
+    while (true) {
+      if (lightPoller.leftInLine) {
+        if (!leftInLine) {
+          leftInLine = true;
+          if (!lightPoller.rightInLine)
+            adjustTrajectory(1);
+          leftMotor.setSpeed(0);
+          rightMotor.setSpeed(0);
+          break;
+        }
+      } else {
+        leftInLine = false;
+      }
+
+      if (lightPoller.rightInLine) {
+        if (!rightInLine) {
+          rightInLine = true;
+          if (!lightPoller.leftInLine)
+            adjustTrajectory(0);
+          leftMotor.setSpeed(0);
+          rightMotor.setSpeed(0);
+          break;
+        }
+      } else {
+        rightInLine = false;
+      }
+    }
+  }
+
+  /**
+   * TODO
+   * 
+   * @param laggingSide
+   */
+  private void adjustTrajectory(int laggingSide) {
+    // Correct the direction
+    if (laggingSide == 0) {
+      rightMotor.setSpeed(0);
+      leftMotor.setSpeed(ROTATE_SPEED / 2);
+      while (true) {
+        if (lightPoller.leftInLine)
+          break;
+        try {
+          Thread.sleep(LOCALIZATION_PERIOD);
+        } catch (InterruptedException e) {
+        }
+      }
+    } else if (laggingSide == 1) {
+      leftMotor.setSpeed(0);
+      rightMotor.setSpeed(ROTATE_SPEED / 2);
+      while (true) {
+        if (lightPoller.rightInLine) {
+          break;
+        }
+        try {
+          Thread.sleep(LOCALIZATION_PERIOD);
+        } catch (InterruptedException e) {
+        }
+      }
+    }
   }
 
   /**
