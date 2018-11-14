@@ -44,10 +44,10 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 public class DomainController {
 
   // Constants
-  private static final double TRACK = 8.70;
+  private static final double TRACK = 8.80;
   private static final double WHEEL_RADIUS = 2.05;
   private static final double TILE_SIZE = 30.48;
-  private static final double MOTOR_OFFSET = 1.01; // TEST BATTERY IS 8V FOR BEST VALUE.
+  private static final double MOTOR_OFFSET = 1.02; // TEST BATTERY IS 8V FOR BEST VALUE.
   private static final double SENSOR_OFFSET = 12.5;
   private static final boolean TRAJECTORY_CORRECTION = true;
 
@@ -253,7 +253,7 @@ public class DomainController {
     Thread disThread = new Thread(display);
     disThread.start();
 
-    //localizer.localize(startCorner, 8, 8);
+    localizer.localize(startCorner, 8, 8);
     // navigation.travelTo(0, 1);
     // navigation.waitNavigation();
     /*navigation.travelTo(4, 1);

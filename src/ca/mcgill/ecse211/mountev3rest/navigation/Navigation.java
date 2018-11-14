@@ -26,7 +26,7 @@ public class Navigation implements Runnable {
   private static final int FORWARD_SPEED = 120;
   private static final int ROTATE_SPEED = 80;
   private static final int NAVIGATION_PERIOD = 25;
-  private static final int CORRECTION_TIME_LIMIT = 1000;
+  private static final int CORRECTION_TIME_LIMIT = 2200;
   private static final double TILE_SIZE = 30.48;
   private final double MOTOR_OFFSET;
   private final double SENSOR_OFFSET;
@@ -89,6 +89,8 @@ public class Navigation implements Runnable {
     this.SENSOR_OFFSET = SENSOR_OFFSET;
 
     target = new double[2];
+    /*target[0] = -1;
+    target[1] = -1;*/
 
     isNavigating = false;
     directionChanged = false;
@@ -172,6 +174,22 @@ public class Navigation implements Runnable {
 
     directionChanged = true;
     isNavigating = true;
+  }
+  
+  public void travelToX(double x) {
+	  target[0] = x;
+	  target[1] = -1;
+	  
+	  directionChanged = true;
+	  isNavigating = true;
+  }
+  
+  public void travelToY(double y) {
+	  target[0] = -1;
+	  target[1] = y;
+	  
+	  directionChanged = true;
+	  isNavigating = true;
   }
 
   /**
@@ -341,10 +359,10 @@ public class Navigation implements Runnable {
     System.out.println("Current line = " + currentLine);
     
     if (lastCorrection == currentLine) {
+      /*Sound.beep();
       Sound.beep();
       Sound.beep();
-      Sound.beep();
-      Sound.beep();
+      Sound.beep();*/
       correcting = false;
       return;
     }
@@ -478,6 +496,13 @@ public class Navigation implements Runnable {
     leftMotor.rotate((int) (convertDistance(WHEEL_RADIUS, realTarget[0]) * MOTOR_OFFSET), true);
     rightMotor.rotate(convertDistance(WHEEL_RADIUS, realTarget[0]), true);
   }
+  
+  /*private void goToTarget() {
+	  double[] position = odometer.getXYT();
+	  if (target[0] != -1) {
+		  double dist = 
+	  }
+  }*/
 
   /**
    * Computes the absolute angle and distance in centimeters required to reach the target with

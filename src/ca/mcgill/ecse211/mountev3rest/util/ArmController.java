@@ -7,6 +7,7 @@ import ca.mcgill.ecse211.mountev3rest.sensor.ColorDetector;
 import ca.mcgill.ecse211.mountev3rest.sensor.LightPoller;
 import ca.mcgill.ecse211.mountev3rest.sensor.UltrasonicPoller;
 import lejos.hardware.Button;
+import lejos.hardware.Sound;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 import lejos.hardware.motor.EV3MediumRegulatedMotor;
 
@@ -102,8 +103,8 @@ public class ArmController {
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), false);
 
     boolean changeDirection = true; 
+	int counter = 0; 
     while (true) {
-    		int counter = 0; 
     		int color = 5; 
     		
     		
@@ -120,7 +121,9 @@ public class ArmController {
     		
     		color = colorDetector.getColor(); 
     		if (color != 5) {
-    			System.out.println(color); 
+    			for (int i = 0; i < color; i++) {
+    				Sound.beep();
+    			}
     			break; 
     		}
     		
@@ -129,6 +132,7 @@ public class ArmController {
     		if (counter>= 6) {
     			break; 
     		}
+    		
 
     }
 

@@ -25,7 +25,7 @@ public class Localizer {
   private static final int ROTATE_SPEED = 80;
   private static final int FORWARD_SPEED = 120;
   private static final int THRESHOLD = 45;
-  private static final int CORRECTION_TIME_LIMIT = 1000;
+  private static final int CORRECTION_TIME_LIMIT = 2200;
   private final double SENSOR_OFFSET;
   private final double TILE_SIZE;
 
@@ -75,6 +75,10 @@ public class Localizer {
   }
 
   public void tunnelLocalization() {
+	  
+	boolean wasEnabled = navigation.isCorrectionEnabled();
+	navigation.disableCorrection();
+	  
     double[] position;
 
     leftMotor.setSpeed(FORWARD_SPEED);
@@ -107,19 +111,16 @@ public class Localizer {
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
     
-    navigation.turnTo(odometer.getXYT()[2] + 90);
+    navigation.turnTo(odometer.getXYT()[2] - 90);
     
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
+    
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 2), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 2), false);
 
     leftMotor.forward();
     rightMotor.forward();
-    
-    try {
-      Thread.sleep(500);
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    }
 
     findLine();
     position = odometer.getXYT();
@@ -145,6 +146,8 @@ public class Localizer {
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
 
+    if (wasEnabled)
+    		navigation.enableCorrection();
   }
 
   /**
