@@ -45,7 +45,7 @@ public class MetaController {
     //System.out.println(String.format("Tunnel: LL[%d, %d]  UR[%d, %d]", map.TN_LL_x, map.TN_LL_y,
     //    map.TN_UR_x, map.TN_UR_y));
 
-    //double[][] points = {{3.5, 1.5}, {3.5, 3.5}};
+    double[][] points = {{3.5, 1.5}, {3.5, 3.5}};
 
     TextLCD lcd = LocalEV3.get().getTextLCD();
 
@@ -55,9 +55,9 @@ public class MetaController {
     Button.waitForAnyPress();
 
     DomainController controller = new DomainController();
-    // controller.testNavigation(true, 0, points, lcd);
+    controller.testNavigation(true, 0, points, lcd);
     // controller.grabRings(0);
-    controller.testColorDetection(lcd);
+    //controller.testColorDetection(lcd);
     System.exit(0);
   }
 
