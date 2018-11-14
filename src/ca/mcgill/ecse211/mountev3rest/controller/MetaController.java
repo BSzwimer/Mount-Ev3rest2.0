@@ -58,7 +58,6 @@ public class MetaController {
     // controller.testNavigation(true, 0, points, lcd);
     // controller.grabRings(0);
     controller.testColorDetection(lcd);
-
     System.exit(0);
   }
 
