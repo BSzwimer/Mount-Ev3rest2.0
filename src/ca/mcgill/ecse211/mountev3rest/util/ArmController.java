@@ -18,7 +18,7 @@ import lejos.hardware.motor.EV3MediumRegulatedMotor;
  *
  */
 public class ArmController {
-  
+
   // Constants
   private static final int DISTANCE_TO_TREE = 5; // TODO
 
@@ -37,13 +37,14 @@ public class ArmController {
    * @param motor2 Motor that will be used to control the displacement of the base on the arm.
    */
   public ArmController(EV3MediumRegulatedMotor colorSensorMotor, EV3MediumRegulatedMotor armMotor,
-      EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor, Navigation navigation, ColorDetector colorDetector) {
+      EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor, Navigation navigation,
+      ColorDetector colorDetector) {
     this.colorSensorMotor = colorSensorMotor;
     this.armMotor = armMotor;
     this.leftMotor = leftMotor;
     this.rightMotor = rightMotor;
     this.navigation = navigation;
-    this.colorDetector = colorDetector; 
+    this.colorDetector = colorDetector;
   }
 
   /**
@@ -85,46 +86,42 @@ public class ArmController {
    * @param position Position of the ring to get, 1 for high or 0 for low.
    * @see ColorDetector
    */
-  public void getRing( ) {
-	  
-	  	colorSensorMotor.setSpeed(25);
-	  	//need to determine correct angle to rotate to the top and bottom!!!!!!!!
-	  	colorSensorMotor.rotate(50);
-	  	
-	//  	long startingTime = System.currentTimeMillis(); 
-	  	while(true) {
-	  		int currentColor = 0; 
-	  		currentColor =colorDetector.getColor();
-	  			if(currentColor != 0)
-	  				{
-	  					break; 
-	  				} 	
-	  	}
-	  	
-	  	
-   
-    		//not tested yet, however much we want to open up the arm before approaching the tree 
-    		armMotor.setSpeed(50);
-    		armMotor.rotate(100, true);
-    		
-    		leftMotor.setSpeed(50);
-    		rightMotor.setSpeed(50);
-    		
-    		//not tested yet, dont know actual distance it should approach tree
-    		leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 5), true);
-    		rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 5), false); 
-    		
-    		//should be infront of the tree 
-    		armMotor.setSpeed(75);
-    		armMotor.rotate(-150);
-    		
-    		//back the fuckupppp 
-    		leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -5), true);
-    		rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -5), false);
-    		
-    		
-    		
-    	
+  public void getRing() {
+
+    // colorSensorMotor.setSpeed(25);
+    // //need to determine correct angle to rotate to the top and bottom!!!!!!!!
+    // colorSensorMotor.rotate(50);
+    //
+    //// long startingTime = System.currentTimeMillis();
+    // while(true) {
+    // int currentColor = 0;
+    // currentColor =colorDetector.getColor();
+    // if(currentColor != 0)
+    // {
+    // break;
+    // }
+    // }
+    //
+
+
+    // not tested yet, however much we want to open up the arm before approaching the tree
+    armMotor.setSpeed(50);
+    armMotor.rotate(100, false);
+
+    leftMotor.setSpeed(50);
+    rightMotor.setSpeed(50);
+
+    // not tested yet, dont know actual distance it should approach tree
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 5), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 5), false);
+
+    // should be infront of the tree
+    armMotor.setSpeed(50);
+    armMotor.rotate(-100, false);
+
+    // back the fuckupppp
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -5), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -5), false);
   }
 
   /**
