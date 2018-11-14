@@ -23,7 +23,7 @@ public class Localizer {
   // Constants
   private static final int LOCALIZATION_PERIOD = 25;
   private static final int ROTATE_SPEED = 80;
-  private static final int FORWARD_SPEED = 150;
+  private static final int FORWARD_SPEED = 120;
   private static final int THRESHOLD = 45;
   private static final int CORRECTION_TIME_LIMIT = 1000;
   private final double SENSOR_OFFSET;

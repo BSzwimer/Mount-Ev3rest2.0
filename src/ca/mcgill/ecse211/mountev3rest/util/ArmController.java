@@ -104,23 +104,26 @@ public class ArmController {
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), false);
     
 
-    
+    boolean changeDirection = true; 
     while (true) {
     		int counter = 0; 
-    		int color = -1; 
-    		boolean changeDirection = true; 
+    		int color = 5; 
+    		
     		
     		if(changeDirection) {
+    			colorSensorMotor.setSpeed(10);
     			colorSensorMotor.rotate(50, false);
     			changeDirection = false;
     		}
     		else {
+    			colorSensorMotor.setSpeed(10);
     			colorSensorMotor.rotate(-50, false);
     			changeDirection = true; 
     		}
     		
     		color = colorDetector.getColor(); 
-    		if (color != -1) {
+    		if (color != 5) {
+    			System.out.println(color); 
     			break; 
     		}
     		
