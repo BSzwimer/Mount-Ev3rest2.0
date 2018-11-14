@@ -50,6 +50,10 @@ public class CoordinateMap {
   public long I_LL_y;
   public long I_UR_x;
   public long I_UR_y;
+  
+  public CoordinateMap() {
+    
+  }
 
   /**
    * Creates a {@code Map} with default values for its coordinates.

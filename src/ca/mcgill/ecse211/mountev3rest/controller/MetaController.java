@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Map;
 import org.json.simple.parser.ParseException;
 import ca.mcgill.ecse211.WiFiClient.WifiConnection;
+import ca.mcgill.ecse211.mountev3rest.navigation.Display;
 import ca.mcgill.ecse211.mountev3rest.navigation.OdometerException;
 import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
 import ca.mcgill.ecse211.mountev3rest.util.ArmController;
@@ -38,9 +39,9 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class MetaController {
 
 	// Constants
-	private static final String SERVER_IP = "192.168.2.23";
+	private static final String SERVER_IP = "192.168.2.12";
 	private static final int TEAM_NUMBER = 11;
-	private static final boolean ENABLE_DEBUG_WIFI_PRINT = true;
+	private static final boolean ENABLE_DEBUG_WIFI_PRINT = false;
 
 	public static void main(String[] args) throws OdometerException, PollerException {
 
@@ -61,7 +62,44 @@ public class MetaController {
 		// controller.testNavigation(true, 0, points, lcd);
 		// controller.grabRings(0);
 		System.exit(0);*/
-		run();
+		//run();
+		
+        //Button.waitForAnyPress();
+	      
+        // Get Wi-Fi information.
+      CoordinateMap map = getWiFiData();
+	  //CoordinateMap map = new CoordinateMap();
+        
+        TextLCD lcd = LocalEV3.get().getTextLCD();
+        
+        lcd.clear();
+        lcd.drawString("Press any button", 0, 3);
+        lcd.drawString("    to start.   ", 0, 4);
+
+        Button.waitForAnyPress();
+        
+         // Create controller.
+        DomainController domainController = new DomainController(map);
+
+        
+        Display display = new Display(lcd);
+        Thread disThread = new Thread(display);
+        disThread.start();
+        
+        //domainController.testNavigation(true, 1, null, lcd);
+
+        // START RING SEARCH ROUTINE
+
+        //domainController.localize();
+        
+        
+        Button.waitForAnyPress();
+        
+        domainController.crossTunnel();
+        //domainController.approachTree(Map.T_LL, Map.T_UR);
+        //domainController.grabRings();
+        //domainController.crossTunnel();
+        System.exit(0);
 	}
 
 	// Attributes
@@ -94,17 +132,37 @@ public class MetaController {
 	 * @throws OdometerException
 	 */
 	public static void run() throws OdometerException, PollerException {
+        //Button.waitForAnyPress();
+	  
 		// Get Wi-Fi information.
 		CoordinateMap map = getWiFiData();
+		
+	    TextLCD lcd = LocalEV3.get().getTextLCD();
+	    
+	    lcd.clear();
+	    lcd.drawString("Press any button", 0, 3);
+	    lcd.drawString("    to start.   ", 0, 4);
 
-		// Create controller.
-		DomainController domainController = new DomainController(map);
+	    Button.waitForAnyPress();
+	    
+	     // Create controller.
+        DomainController domainController = new DomainController(map);
+
+        
+        Display display = new Display(lcd);
+        Thread disThread = new Thread(display);
+        disThread.start();
+        
+        //domainController.testNavigation(true, 1, null, lcd);
 
 		// START RING SEARCH ROUTINE
 
 		domainController.localize();
+		
+		Button.waitForAnyPress();
+		
 		domainController.crossTunnel();
-		//domainController.approachTree(Map.T_LL, Map.T_UR);
+		domainController.approachTree();
 		//domainController.grabRings();
 		//domainController.crossTunnel();
 		System.exit(0);

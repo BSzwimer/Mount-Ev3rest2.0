@@ -203,11 +203,13 @@ public class Localizer {
             leftMotor.backward();
             rightMotor.forward();
             firstSearch = false;
+            Sound.beep();
             measurementTaken = true;
           } else {
             alpha = odometer.getXYT()[2];
             leftMotor.setSpeed(0);
             rightMotor.setSpeed(0);
+            Sound.beep();
             break;
           }
         }
@@ -232,7 +234,7 @@ public class Localizer {
       case 0:
         break;
       case 1:
-        odometer.update(0, 0, 270);
+        odometer.update(0, 0, -90);
         break;
       case 2:
         odometer.update(0, 0, 180);
@@ -244,6 +246,9 @@ public class Localizer {
 
     if (wasEnabled)
       navigation.enableCorrection();
+    
+    navigation.turnTo(0);
+    Button.waitForAnyPress();
 
   }
 
@@ -270,7 +275,23 @@ public class Localizer {
     navigation.disableCorrection();
 
     // Localize in Y
-    navigation.turnTo(0);
+    switch((int)startingCorner) {
+      case 0:
+        navigation.turnTo(0);
+        break;
+      case 1:
+        navigation.turnTo(0);
+        break;
+      case 2:
+        navigation.turnTo(180);
+        break;
+      case 3:
+        navigation.turnTo(180);
+        break;
+    }
+    
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 10), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 10), true);
 
     double[] initialPosition = odometer.getXYT();
 
@@ -281,19 +302,45 @@ public class Localizer {
 
     findLine();
     double[] currPosition = odometer.getXYT();
-    odometer.setXYT(currPosition[0], SENSOR_OFFSET, 0);
+    switch((int)startingCorner) {
+      case 0:
+        odometer.setXYT(currPosition[0], SENSOR_OFFSET, 0);
+        break;
+      case 1:
+        odometer.setXYT(currPosition[0], SENSOR_OFFSET, 0);
+        break;
+      case 2:
+        odometer.setXYT(currPosition[0], -SENSOR_OFFSET , 180);
+        break;
+      case 3:
+        odometer.setXYT(currPosition[0], -SENSOR_OFFSET, 180);
+        break;
+    }
 
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]),
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
         true);
     rightMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[1] - currPosition[1]),
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
         false);
 
     // Localize in X
-    navigation.turnTo(90);
+    switch((int)startingCorner) {
+      case 0:
+        navigation.turnTo(90);
+        break;
+      case 1:
+        navigation.turnTo(270);
+        break;
+      case 2:
+        navigation.turnTo(270);
+        break;
+      case 3:
+        navigation.turnTo(90);
+        break;
+    }
 
     initialPosition = odometer.getXYT();
 
@@ -304,15 +351,28 @@ public class Localizer {
 
     findLine();
     currPosition = odometer.getXYT();
-    odometer.setXYT(SENSOR_OFFSET, currPosition[1], 90);
+    switch((int)startingCorner) {
+      case 0:
+        odometer.setXYT(SENSOR_OFFSET, currPosition[1], 90);
+        break;
+      case 1:
+        odometer.setXYT(-SENSOR_OFFSET, currPosition[1], 270);
+        break;
+      case 2:
+        odometer.setXYT(-SENSOR_OFFSET, currPosition[1], 270);
+        break;
+      case 3:
+        odometer.setXYT(SENSOR_OFFSET, currPosition[1], 90);
+        break;
+    }
 
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]),
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
         true);
     rightMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, initialPosition[0] - currPosition[0]),
+        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
         false);
 
     switch ((int)startingCorner) {
@@ -330,7 +390,7 @@ public class Localizer {
         break;
     }
 
-    navigation.travelTo(1, 1);
+
     navigation.waitNavigation();
     navigation.turnTo(0);
     Button.waitForAnyPress();

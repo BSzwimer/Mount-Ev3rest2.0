@@ -74,7 +74,8 @@ public class Navigation implements Runnable {
    */
   public Navigation(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
       boolean trajectoryCorrection, final double WHEEL_RADIUS, final double TRACK,
-      final double MOTOR_OFFSET, final double SENSOR_OFFSET) throws OdometerException, PollerException {
+      final double MOTOR_OFFSET, final double SENSOR_OFFSET)
+      throws OdometerException, PollerException {
 
     this.odometer = Odometer.getOdometer();
     this.lightPoller = LightPoller.getLightPoller();
@@ -124,7 +125,7 @@ public class Navigation implements Runnable {
       }
 
       if (trajectoryCorrection) {
-        
+
         if (lightPoller.leftInLine) {
           if (!leftInLine) {
             leftInLine = true;
@@ -134,7 +135,7 @@ public class Navigation implements Runnable {
         } else {
           leftInLine = false;
         }
-        
+
         if (lightPoller.rightInLine) {
           if (!rightInLine) {
             rightInLine = true;
@@ -144,9 +145,9 @@ public class Navigation implements Runnable {
         } else {
           rightInLine = false;
         }
-        
+
       }
-      
+
       // Set this flag to let other threads know that the robot is currently reaching a waypoint
       if (!leftMotor.isMoving() && !rightMotor.isMoving())
         isNavigating = false;
@@ -176,21 +177,21 @@ public class Navigation implements Runnable {
     directionChanged = true;
     isNavigating = true;
   }
-  
+
   public void travelToX(double x) {
-	  target[0] = x;
-	  target[1] = -1;
-	  
-	  directionChanged = true;
-	  isNavigating = true;
+    target[0] = x;
+    target[1] = -1;
+
+    directionChanged = true;
+    isNavigating = true;
   }
-  
+
   public void travelToY(double y) {
-	  target[0] = -1;
-	  target[1] = y;
-	  
-	  directionChanged = true;
-	  isNavigating = true;
+    target[0] = -1;
+    target[1] = y;
+
+    directionChanged = true;
+    isNavigating = true;
   }
 
   /**
@@ -227,7 +228,7 @@ public class Navigation implements Runnable {
     rightMotor.setSpeed(ROTATE_SPEED);
     leftMotor.rotate(convertAngle(WHEEL_RADIUS, TRACK, targetRotation) * direction, true);
     rightMotor.rotate(-convertAngle(WHEEL_RADIUS, TRACK, targetRotation) * direction, false);
-    
+
     trajectoryCorrection = wasEnabled;
   }
 
@@ -254,14 +255,14 @@ public class Navigation implements Runnable {
   }
 
   public void waitNavigation() {
-	long time =System.currentTimeMillis();
+    long time = System.currentTimeMillis();
     while (true) {
-    	if (isNavigating)
-    		time =System.currentTimeMillis();
-    	else {
-    		if (System.currentTimeMillis() - time > 400)
-    			break;
-    	}
+      if (isNavigating)
+        time = System.currentTimeMillis();
+      else {
+        if (System.currentTimeMillis() - time > 400)
+          break;
+      }
       try {
         Thread.sleep(NAVIGATION_PERIOD);
       } catch (InterruptedException e) {
@@ -281,7 +282,7 @@ public class Navigation implements Runnable {
     double[] position = odometer.getXYT();
     return computeRealTarget(position[0], position[1], x * TILE_SIZE, y * TILE_SIZE)[0];
   }
-  
+
   /**
    * TODO
    */
@@ -293,10 +294,10 @@ public class Navigation implements Runnable {
       direction = Direction.SOUTH;
     else if (theta > 225 && theta < 315)
       direction = Direction.WEST;
-    else 
+    else
       direction = Direction.NORTH;
   }
-  
+
   /**
    * TODO
    * 
@@ -307,7 +308,7 @@ public class Navigation implements Runnable {
     double position[] = odometer.getXYT();
     double distInTile;
     double odoReading;
-    switch(direction) {
+    switch (direction) {
       case NORTH:
         position[1] -= SENSOR_OFFSET;
         odoReading = position[1];
@@ -332,46 +333,45 @@ public class Navigation implements Runnable {
         distInTile = 0;
         odoReading = 0;
     }
-    
+
     if (distInTile > TILE_SIZE / 2)
-      return (int)((odoReading + (TILE_SIZE - distInTile)) / TILE_SIZE);
+      return (int) ((odoReading + (TILE_SIZE - distInTile)) / TILE_SIZE);
     else
-      return (int)((odoReading - distInTile)/TILE_SIZE);
+      return (int) ((odoReading - distInTile) / TILE_SIZE);
   }
-  
+
   /**
    * TODO
    * 
    * @param laggingSide
    */
   public void adjustTrajectory(int laggingSide) {
-	  
-	correcting = true;
-    
+
+    correcting = true;
+
     // Check that this line is no the same as the one for the past correction.
     int lastCorrection = -1;
     if (direction == Direction.NORTH || direction == Direction.SOUTH)
       lastCorrection = lastYCorrection;
     else if (direction == Direction.EAST || direction == Direction.WEST)
       lastCorrection = lastXCorrection;
-    
+
     int currentLine = estimateCurrentLine();
-    
+
     System.out.println("Current line = " + currentLine);
-    
+
     if (lastCorrection == currentLine) {
-      /*Sound.beep();
-      Sound.beep();
-      Sound.beep();
-      Sound.beep();*/
+      /*
+       * Sound.beep(); Sound.beep(); Sound.beep(); Sound.beep();
+       */
       correcting = false;
       return;
     }
-    
+
     boolean goBack = false;
     long startTime = System.currentTimeMillis();
     int prevTacho = 0;
-    
+
     // Correct the direction
     if (laggingSide == 0) {
       rightMotor.setSpeed(0);
@@ -381,7 +381,7 @@ public class Navigation implements Runnable {
         if (lightPoller.leftInLine) {
           leftMotor.setSpeed(0);
           rightMotor.setSpeed(0);
-          break; 
+          break;
         } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
           goBack = true;
           break;
@@ -410,21 +410,21 @@ public class Navigation implements Runnable {
         }
       }
     }
-    
+
     if (goBack) {
       if (laggingSide == 0)
         leftMotor.rotate(prevTacho - leftMotor.getTachoCount());
       else if (laggingSide == 1)
         rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
-      
+
       directionChanged = true;
       return;
     }
-    
+
     // Correct the theta value of the odometer
     updateDirection();
     double[] position = odometer.getXYT();
-    switch(direction) {
+    switch (direction) {
       case NORTH:
         odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
         break;
@@ -442,33 +442,33 @@ public class Navigation implements Runnable {
         break;
       default:
     }
-    
-    if (direction == Direction.NORTH || direction == Direction.SOUTH) 
-        lastYCorrection = currentLine;
-      else if (direction == Direction.EAST || direction == Direction.WEST)
-        lastXCorrection= currentLine;
-    
+
+    if (direction == Direction.NORTH || direction == Direction.SOUTH)
+      lastYCorrection = currentLine;
+    else if (direction == Direction.EAST || direction == Direction.WEST)
+      lastXCorrection = currentLine;
+
     // Indicate the state machine to recompute the direction.
     directionChanged = true;
     isNavigating = true;
     correcting = false;
-    
+
   }
-  
+
   /**
    * TODO
    */
   public void enableCorrection() {
     trajectoryCorrection = true;
   }
-  
+
   /**
    * TODO
    */
   public void disableCorrection() {
     trajectoryCorrection = false;
   }
-  
+
   /**
    * TODO
    * 
@@ -481,54 +481,58 @@ public class Navigation implements Runnable {
   /**
    * Moves the robot in the direction of the current target set in the state machine.
    */
-  /*private void goToTarget() {
-    // Compute the target's absolute angle and the distance required to reach it
-    double[] position = odometer.getXYT();
-    double[] realTarget =
-        computeRealTarget(position[0], position[1], target[0] * TILE_SIZE, target[1] * TILE_SIZE);
+  /*
+   * private void goToTarget() { // Compute the target's absolute angle and the distance required to
+   * reach it double[] position = odometer.getXYT(); double[] realTarget =
+   * computeRealTarget(position[0], position[1], target[0] * TILE_SIZE, target[1] * TILE_SIZE);
+   * 
+   * // Turn to target angle targetAngle = realTarget[1]; turnTo(realTarget[1]);
+   * 
+   * // Move forward the required target distance leftMotor.setSpeed((int) (FORWARD_SPEED *
+   * MOTOR_OFFSET)); rightMotor.setSpeed(FORWARD_SPEED); leftMotor.rotate((int)
+   * (convertDistance(WHEEL_RADIUS, realTarget[0]) * MOTOR_OFFSET), true);
+   * rightMotor.rotate(convertDistance(WHEEL_RADIUS, realTarget[0]), true); }
+   */
 
-    // Turn to target angle
-    targetAngle = realTarget[1];
-    turnTo(realTarget[1]);
-
-    // Move forward the required target distance
-    leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
-    rightMotor.setSpeed(FORWARD_SPEED);
-    leftMotor.rotate((int) (convertDistance(WHEEL_RADIUS, realTarget[0]) * MOTOR_OFFSET), true);
-    rightMotor.rotate(convertDistance(WHEEL_RADIUS, realTarget[0]), true);
-  }*/
-  
   private void goToTarget() {
-	  double[] position = odometer.getXYT();
-	  if (target[0] != -1) {
-		  double dist = position[0] - target[0] * TILE_SIZE;
-		  if (Math.abs(dist) < MIN_TRAVEL_DISTANCE) {
-			  return;
-		  }
-		  if (dist < 0) {
-			  turnTo(270);
-			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
-			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), false);
-		  } else {
-			  turnTo(90);
-			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
-			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), false);
-		  }
-	  } else if (target[1] != -1) {
-		  double dist = position[1] - target[1] * TILE_SIZE;
-		  if (Math.abs(dist) < MIN_TRAVEL_DISTANCE) {
-			  return;
-		  }
-		  if (dist < 0) {
-			  turnTo(180);
-			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
-			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), false);
-		  } else {
-			  turnTo(0);
-			  leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
-			  rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), false);
-		  }
-	  }
+    double[] position = odometer.getXYT();
+    if (target[0] != -1) {
+      double dist = target[0] * TILE_SIZE - position[0];
+      if (Math.abs(dist) < MIN_TRAVEL_DISTANCE) {
+        return;
+      }
+      if (dist < 0) {
+        turnTo(270);
+        leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(FORWARD_SPEED);
+        leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
+        rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
+      } else {
+        turnTo(90);
+        leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(FORWARD_SPEED);
+        leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
+        rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
+      }
+    } else if (target[1] != -1) {
+      double dist = target[1] * TILE_SIZE - position[1];
+      if (Math.abs(dist) < MIN_TRAVEL_DISTANCE) {
+        return;
+      }
+      if (dist < 0) {
+        turnTo(180);
+        leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(FORWARD_SPEED);
+        leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
+        rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), false);
+      } else {
+        turnTo(0);
+        leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(FORWARD_SPEED);
+        leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
+        rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), false);
+      }
+    }
   }
 
   /**
@@ -615,7 +619,7 @@ public class Navigation implements Runnable {
   public static int convertAngle(double radius, double width, double angle) {
     return convertDistance(radius, Math.PI * width * angle / 360.0);
   }
-  
+
   public enum Direction {
     INIT, NORTH, EAST, SOUTH, WEST;
   }

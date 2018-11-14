@@ -45,10 +45,10 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 public class DomainController {
 
   // Constants
-  private static final double TRACK = 8.80;
+  private static final double TRACK = 9;
   private static final double WHEEL_RADIUS = 2.05;
   private static final double TILE_SIZE = 30.48;
-  private static final double MOTOR_OFFSET = 1.02; // TEST BATTERY IS 8V FOR BEST VALUE.
+  private static final double MOTOR_OFFSET = 1.00;
   private static final double SENSOR_OFFSET = 12.5;
   private static final boolean TRAJECTORY_CORRECTION = true;
 
@@ -86,13 +86,14 @@ public class DomainController {
    * @see UltrasonicPoller
    */
   public DomainController(CoordinateMap map) throws OdometerException, PollerException {
-	  
-	this.map = map;
+
+    this.map = map;
 
     // Get motor objects
     leftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("D"));
     rightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("A"));
-    EV3MediumRegulatedMotor colorSensorMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("B"));
+    EV3MediumRegulatedMotor colorSensorMotor =
+        new EV3MediumRegulatedMotor(LocalEV3.get().getPort("B"));
     EV3MediumRegulatedMotor armMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("C"));
 
     // Instantiate the sensors
@@ -109,7 +110,8 @@ public class DomainController {
         MOTOR_OFFSET, SENSOR_OFFSET);
     localizer = new Localizer(leftMotor, rightMotor, navigation, SENSOR_OFFSET, TILE_SIZE);
     colorDetector = new ColorDetector(LocalEV3.get().getTextLCD(), lightPoller);
-    armController = new ArmController(colorSensorMotor, armMotor, leftMotor, rightMotor, navigation, colorDetector);
+    armController = new ArmController(colorSensorMotor, armMotor, leftMotor, rightMotor, navigation,
+        colorDetector);
 
     // Initialize and start the required extra threads
     odoThread = new Thread(odometer);
@@ -118,6 +120,8 @@ public class DomainController {
     odoThread.start();
     navThread.start();
     lightThread.start();
+
+    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
   }
 
   /**
@@ -167,7 +171,7 @@ public class DomainController {
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
         navigation.travelToY(map.TN_LL_y - 1);
         navigation.waitNavigation();
-        navigation.travelToX(map.TN_LL_x + 0.5);
+        navigation.travelToX(map.TN_LL_x - 0.5);
         navigation.waitNavigation();
         navigation.travelToY(map.TN_LL_y - 0.5);
         navigation.waitNavigation();
@@ -186,6 +190,9 @@ public class DomainController {
         navigation.waitNavigation();
       }
     }
+
+    localizer.tunnelLocalization();
+
     if (wasEnabled)
       navigation.enableCorrection();
   }
@@ -199,8 +206,31 @@ public class DomainController {
    * @param TG_y Y coordinate of the tree.
    * @param face Face of the tree towards which the robot will be positioned.
    */
-  public void approachTree(int TG_x, int TG_y, int face) {
-    // TODO
+  public void approachTree() {
+    navigation.travelToY(map.T_y);
+    navigation.waitNavigation();
+
+    double[] position = odometer.getXYT();
+
+    if (Math.abs(position[0] - TILE_SIZE * (map.T_x - 1)) < Math
+        .abs(position[1] - TILE_SIZE * (map.T_x + 1))) {
+      navigation.travelToX(map.T_x - 1);
+    } else {
+      navigation.travelToX(map.T_x + 1);
+    }
+    navigation.waitNavigation();
+  }
+  
+  public void goToNextFace() {
+    navigation.turnTo(odometer.getXYT()[2] + 90);
+    leftMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), true);
+    rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), false);
+    
+    navigation.turnTo(odometer.getXYT()[2] - 90);
+    leftMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), true);
+    rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), false);
+    
+    navigation.turnTo(odometer.getXYT()[2] - 90);
   }
 
   /**
@@ -230,8 +260,8 @@ public class DomainController {
    * @see ArmController
    */
   public int grabRings() {
-	boolean wasEnabled = navigation.isCorrectionEnabled();
-	navigation.disableCorrection();
+    boolean wasEnabled = navigation.isCorrectionEnabled();
+    navigation.disableCorrection();
     armController.getRing();
     if (wasEnabled) {
       navigation.enableCorrection();
@@ -264,34 +294,33 @@ public class DomainController {
     Thread disThread = new Thread(display);
     disThread.start();
 
-    //localizer.localize(startCorner, 8, 8);
+    // localizer.localize(startCorner, 0, 4, 4, 4);
     // navigation.travelTo(0, 1);
     // navigation.waitNavigation();
-    /*navigation.travelTo(4, 1);
-    navigation.waitNavigation();
-    
-    Button.waitForAnyPress();
-    
-    navigation.travelTo(4, 5);
-    navigation.waitNavigation();
-    
-    Button.waitForAnyPress();*/
-    
-    //navigation.disableCorrection();
-    
-    /*leftMotor.setSpeed(150);
-    rightMotor.setSpeed(150);
-    leftMotor.forward();
-    rightMotor.forward();
-    
-    Button.waitForAnyPress();*/
+    /*
+     * navigation.travelTo(4, 1); navigation.waitNavigation();
+     * 
+     * Button.waitForAnyPress();
+     * 
+     * navigation.travelTo(4, 5); navigation.waitNavigation();
+     * 
+     * Button.waitForAnyPress();
+     */
 
-    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
+    // navigation.disableCorrection();
+
+    /*
+     * leftMotor.setSpeed(150); rightMotor.setSpeed(150); leftMotor.forward(); rightMotor.forward();
+     * 
+     * Button.waitForAnyPress();
+     */
+
+    odometer.setXYT(TILE_SIZE * 7, TILE_SIZE, 0);
     crossTunnel();
-    localizer.tunnelLocalization();
-    navigation.travelTo(5, 5);
-    navigation.waitNavigation();
-    //grabRings(0);
+    /*
+     * localizer.tunnelLocalization(); navigation.travelTo(5, 5); navigation.waitNavigation();
+     */
+    // grabRings(0);
 
   }
 
