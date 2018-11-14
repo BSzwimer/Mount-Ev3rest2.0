@@ -57,7 +57,6 @@ public class MetaController {
     DomainController controller = new DomainController();
     controller.testNavigation(true, 0, points, lcd);
     // controller.grabRings(0);
-    //controller.testColorDetection(lcd);
     System.exit(0);
   }
 
