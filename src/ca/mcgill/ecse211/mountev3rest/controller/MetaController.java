@@ -10,6 +10,7 @@ import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
 import ca.mcgill.ecse211.mountev3rest.util.ArmController;
 import ca.mcgill.ecse211.mountev3rest.util.CoordinateMap;
 import lejos.hardware.Button;
+import lejos.hardware.Sound;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
@@ -39,7 +40,7 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class MetaController {
 
 	// Constants
-	private static final String SERVER_IP = "192.168.2.12";
+	private static final String SERVER_IP = "192.168.2.2";
 	private static final int TEAM_NUMBER = 11;
 	private static final boolean ENABLE_DEBUG_WIFI_PRINT = false;
 
@@ -81,23 +82,28 @@ public class MetaController {
          // Create controller.
         DomainController domainController = new DomainController(map);
 
+        //domainController.testNavigation(true, 0, null, lcd);
         
         Display display = new Display(lcd);
         Thread disThread = new Thread(display);
         disThread.start();
         
+        
         //domainController.testNavigation(true, 1, null, lcd);
 
         // START RING SEARCH ROUTINE
 
-        //domainController.localize();
+        domainController.localize();
+        Sound.beep();
+        Sound.beep();
+        Sound.beep();
         
         
-        Button.waitForAnyPress();
+        
         
         domainController.crossTunnel();
-        //domainController.approachTree(Map.T_LL, Map.T_UR);
-        //domainController.grabRings();
+        domainController.approachTree();
+        domainController.grabRings();
         //domainController.crossTunnel();
         System.exit(0);
 	}
@@ -135,7 +141,7 @@ public class MetaController {
         //Button.waitForAnyPress();
 	  
 		// Get Wi-Fi information.
-		CoordinateMap map = getWiFiData();
+		//CoordinateMap map = getWiFiData();
 		
 	    TextLCD lcd = LocalEV3.get().getTextLCD();
 	    
@@ -143,10 +149,10 @@ public class MetaController {
 	    lcd.drawString("Press any button", 0, 3);
 	    lcd.drawString("    to start.   ", 0, 4);
 
-	    Button.waitForAnyPress();
+	    //Button.waitForAnyPress();
 	    
 	     // Create controller.
-        DomainController domainController = new DomainController(map);
+        DomainController domainController = new DomainController(null);
 
         
         Display display = new Display(lcd);
@@ -159,12 +165,11 @@ public class MetaController {
 
 		domainController.localize();
 		
-		Button.waitForAnyPress();
 		
 		domainController.crossTunnel();
 		domainController.approachTree();
-		//domainController.grabRings();
-		//domainController.crossTunnel();
+		domainController.grabRings();
+		//domainController.crossTunnel();*/
 		System.exit(0);
 	}
 

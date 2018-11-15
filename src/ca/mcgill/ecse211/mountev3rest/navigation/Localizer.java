@@ -25,7 +25,7 @@ public class Localizer {
   private static final int ROTATE_SPEED = 80;
   private static final int FORWARD_SPEED = 120;
   private static final int THRESHOLD = 45;
-  private static final int CORRECTION_TIME_LIMIT = 2200;
+  private static final int CORRECTION_TIME_LIMIT = 2500;
   private final double SENSOR_OFFSET;
   private final double TILE_SIZE;
 
@@ -164,6 +164,7 @@ public class Localizer {
    */
   public void localize(long startingCorner, long LL_x, long LL_y, long UR_x, long UR_y) {
     ultrasonicLocalization(startingCorner);
+    
     lightLocalization(startingCorner, LL_x, LL_y, UR_x, UR_y);
   }
 
@@ -247,9 +248,7 @@ public class Localizer {
     if (wasEnabled)
       navigation.enableCorrection();
     
-    navigation.turnTo(0);
-    Button.waitForAnyPress();
-
+   
   }
 
   /**
@@ -273,6 +272,24 @@ public class Localizer {
   public void lightLocalization(long startingCorner, long LL_x, long LL_y, long UR_x, long UR_y) {
     boolean wasEnabled = navigation.isCorrectionEnabled();
     navigation.disableCorrection();
+    
+    switch((int)startingCorner) {
+      case 0:
+        navigation.turnTo(45);
+        break;
+      case 1:
+        navigation.turnTo(315);
+        break;
+      case 2:
+        navigation.turnTo(225);
+        break;
+      case 3:
+        navigation.turnTo(135);
+        break;
+    }
+    
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), false);
 
     // Localize in Y
     switch((int)startingCorner) {
@@ -289,9 +306,6 @@ public class Localizer {
         navigation.turnTo(180);
         break;
     }
-    
-    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 10), true);
-    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 10), true);
 
     double[] initialPosition = odometer.getXYT();
 
@@ -393,7 +407,6 @@ public class Localizer {
 
     navigation.waitNavigation();
     navigation.turnTo(0);
-    Button.waitForAnyPress();
 
     if (wasEnabled)
       navigation.enableCorrection();
@@ -448,7 +461,7 @@ public class Localizer {
     // Correct the direction
     if (laggingSide == 0) {
       rightMotor.setSpeed(0);
-      leftMotor.setSpeed(ROTATE_SPEED / 2);
+      leftMotor.setSpeed(ROTATE_SPEED);
       prevTacho = leftMotor.getTachoCount();
       while (true) {
         if (lightPoller.leftInLine) {
@@ -464,7 +477,7 @@ public class Localizer {
       }
     } else if (laggingSide == 1) {
       leftMotor.setSpeed(0);
-      rightMotor.setSpeed(ROTATE_SPEED / 2);
+      rightMotor.setSpeed(ROTATE_SPEED);
       prevTacho = rightMotor.getTachoCount();
       while (true) {
         if (lightPoller.rightInLine) {

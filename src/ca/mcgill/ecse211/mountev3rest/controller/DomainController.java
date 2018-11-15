@@ -45,11 +45,11 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 public class DomainController {
 
   // Constants
-  private static final double TRACK = 9;
-  private static final double WHEEL_RADIUS = 2.05;
+  private static final double TRACK = 8.63;
+  private static final double WHEEL_RADIUS = 2.0;
   private static final double TILE_SIZE = 30.48;
   private static final double MOTOR_OFFSET = 1.00;
-  private static final double SENSOR_OFFSET = 12.5;
+  private static final double SENSOR_OFFSET = 14.6;
   private static final boolean TRAJECTORY_CORRECTION = true;
 
   // Attributes
@@ -315,8 +315,17 @@ public class DomainController {
      * Button.waitForAnyPress();
      */
 
-    odometer.setXYT(TILE_SIZE * 7, TILE_SIZE, 0);
-    crossTunnel();
+    /*odometer.setXYT(TILE_SIZE * 7, TILE_SIZE, 0);
+    crossTunnel();*/
+    
+    navigation.disableCorrection();
+    
+    leftMotor.setSpeed((int)(100 * 1.02));
+    rightMotor.setSpeed(100);
+    
+    leftMotor.rotate(Navigation.convertAngle(WHEEL_RADIUS, TRACK, 90), true);
+    rightMotor.rotate(-Navigation.convertAngle(WHEEL_RADIUS, TRACK, 90), false);
+    
     /*
      * localizer.tunnelLocalization(); navigation.travelTo(5, 5); navigation.waitNavigation();
      */

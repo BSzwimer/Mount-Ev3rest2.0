@@ -54,9 +54,6 @@ public class Navigation implements Runnable {
   private int lastXCorrection;
   private int lastYCorrection;
   public Direction direction;
-  private boolean correcting;
-  private long timeLeftDetection;
-  private long timeRightDetection;
 
   /**
    * Creates a navigator that will operate using the specified track and wheel radius values.
@@ -83,7 +80,8 @@ public class Navigation implements Runnable {
     this.leftMotor = leftMotor;
     this.rightMotor = rightMotor;
 
-    this.leftMotor.setAcceleration((int) (this.leftMotor.getAcceleration() * MOTOR_OFFSET));
+    this.leftMotor.setAcceleration((int) (this.leftMotor.getAcceleration() * 0.7));
+    this.rightMotor.setAcceleration((int) (this.rightMotor.getAcceleration() * 0.7));
 
     this.WHEEL_RADIUS = WHEEL_RADIUS;
     this.TRACK = TRACK;
@@ -100,7 +98,6 @@ public class Navigation implements Runnable {
     rightInLine = false;
     this.trajectoryCorrection = trajectoryCorrection;
     direction = Direction.INIT;
-    correcting = false;
   }
 
   /**
@@ -224,9 +221,9 @@ public class Navigation implements Runnable {
     boolean wasEnabled = trajectoryCorrection;
     trajectoryCorrection = false;
 
-    leftMotor.setSpeed(ROTATE_SPEED);
+    leftMotor.setSpeed((int)(ROTATE_SPEED * MOTOR_OFFSET));
     rightMotor.setSpeed(ROTATE_SPEED);
-    leftMotor.rotate(convertAngle(WHEEL_RADIUS, TRACK, targetRotation) * direction, true);
+    leftMotor.rotate((int)(convertAngle(WHEEL_RADIUS, TRACK, targetRotation) * MOTOR_OFFSET) * direction, true);
     rightMotor.rotate(-convertAngle(WHEEL_RADIUS, TRACK, targetRotation) * direction, false);
 
     trajectoryCorrection = wasEnabled;
@@ -347,7 +344,6 @@ public class Navigation implements Runnable {
    */
   public void adjustTrajectory(int laggingSide) {
 
-    correcting = true;
 
     // Check that this line is no the same as the one for the past correction.
     int lastCorrection = -1;
@@ -357,14 +353,14 @@ public class Navigation implements Runnable {
       lastCorrection = lastXCorrection;
 
     int currentLine = estimateCurrentLine();
-
-    System.out.println("Current line = " + currentLine);
+    
+    System.out.println("Current line: " + currentLine);
+    System.out.println("x: " + odometer.getXYT()[0] + "y: " + odometer.getXYT()[1]);
 
     if (lastCorrection == currentLine) {
       /*
        * Sound.beep(); Sound.beep(); Sound.beep(); Sound.beep();
        */
-      correcting = false;
       return;
     }
 
@@ -451,7 +447,6 @@ public class Navigation implements Runnable {
     // Indicate the state machine to recompute the direction.
     directionChanged = true;
     isNavigating = true;
-    correcting = false;
 
   }
 
@@ -505,13 +500,13 @@ public class Navigation implements Runnable {
         turnTo(270);
         leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(FORWARD_SPEED);
-        leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
+        leftMotor.rotate((int)(convertDistance(WHEEL_RADIUS, -dist)* MOTOR_OFFSET), true);
         rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
       } else {
         turnTo(90);
         leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(FORWARD_SPEED);
-        leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
+        leftMotor.rotate((int)(convertDistance(WHEEL_RADIUS, dist)* MOTOR_OFFSET), true);
         rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
       }
     } else if (target[1] != -1) {
@@ -523,13 +518,13 @@ public class Navigation implements Runnable {
         turnTo(180);
         leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(FORWARD_SPEED);
-        leftMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
+        leftMotor.rotate((int)(convertDistance(WHEEL_RADIUS, -dist)* MOTOR_OFFSET), true);
         rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), false);
       } else {
         turnTo(0);
         leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(FORWARD_SPEED);
-        leftMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
+        leftMotor.rotate((int)(convertDistance(WHEEL_RADIUS, dist)* MOTOR_OFFSET), true);
         rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), false);
       }
     }
