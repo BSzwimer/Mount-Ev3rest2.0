@@ -31,6 +31,7 @@ public class Localizer {
 
   // Object Attributes
   private Odometer odometer;
+  private OdometryCorrector odometryCorrector;
   private UltrasonicPoller usPoller;
   private LightPoller lightPoller;
   private Navigation navigation;
@@ -60,11 +61,12 @@ public class Localizer {
    * @see Odometer
    */
   public Localizer(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
-      Navigation navigation, final double SENSOR_OFFSET, final double TILE_SIZE)
-      throws OdometerException, PollerException {
+      Navigation navigation, OdometryCorrector odometryCorrector, final double SENSOR_OFFSET,
+      final double TILE_SIZE) throws OdometerException, PollerException {
     usPoller = UltrasonicPoller.getUltrasonicPoller();
     lightPoller = LightPoller.getLightPoller();
     odometer = Odometer.getOdometer();
+    this.odometryCorrector = odometryCorrector;
 
     this.navigation = navigation;
     this.leftMotor = leftMotor;
@@ -74,11 +76,13 @@ public class Localizer {
     this.TILE_SIZE = TILE_SIZE;
   }
 
+  /**
+   * Performs localization using two light sensors assuming that the robot just exited a tunnel.
+   */
   public void tunnelLocalization() {
-	  
-	boolean wasEnabled = navigation.isCorrectionEnabled();
-	navigation.disableCorrection();
-	  
+    boolean wasEnabled = odometryCorrector.isEnabled();
+    odometryCorrector.disable();
+
     double[] position;
 
     leftMotor.setSpeed(FORWARD_SPEED);
@@ -89,8 +93,8 @@ public class Localizer {
 
     findLine();
     position = odometer.getXYT();
-    int currentLine = navigation.estimateCurrentLine();
-    switch (navigation.direction) {
+    int currentLine = odometryCorrector.estimateCurrentLine();
+    switch (odometryCorrector.direction) {
       case NORTH:
         odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
         break;
@@ -104,18 +108,18 @@ public class Localizer {
         odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
         break;
     }
-    
+
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
-    
+
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
-    
+
     navigation.turnTo(odometer.getXYT()[2] - 90);
-    
+
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
-    
+
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 2), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 2), false);
 
@@ -124,8 +128,8 @@ public class Localizer {
 
     findLine();
     position = odometer.getXYT();
-    currentLine = navigation.estimateCurrentLine();
-    switch (navigation.direction) {
+    currentLine = odometryCorrector.estimateCurrentLine();
+    switch (odometryCorrector.direction) {
       case NORTH:
         odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
         break;
@@ -139,15 +143,15 @@ public class Localizer {
         odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
         break;
     }
-    
+
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
-    
+
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
 
     if (wasEnabled)
-    		navigation.enableCorrection();
+      odometryCorrector.enable();
   }
 
   /**
@@ -160,11 +164,14 @@ public class Localizer {
    * being the lower left corner and the range increasing in the counter-clockwise direction.
    * 
    * @param startingCorner Starting corner of the robot on the grid.
-   * 
+   * @param LL_x X coordinate of the lower left corner of the robot's team area.
+   * @param LL_y Y coordinate of the lower left corner of the robot's team area.
+   * @param UR_x X coordinate of the upper right corner of the robot's team area.
+   * @param UR_y Y coordinate of the upper right corner of the robot's team area.
    */
   public void localize(long startingCorner, long LL_x, long LL_y, long UR_x, long UR_y) {
     ultrasonicLocalization(startingCorner);
-    
+
     lightLocalization(startingCorner, LL_x, LL_y, UR_x, UR_y);
   }
 
@@ -174,11 +181,10 @@ public class Localizer {
    * is used to estimate the robot's real angle.
    * 
    * @param startingCorner Starting corner of the robot on the grid.
-   * 
    */
   private void ultrasonicLocalization(long startingCorner) {
-    boolean wasEnabled = navigation.isCorrectionEnabled();
-    navigation.disableCorrection();
+    boolean wasEnabled = odometryCorrector.isEnabled();
+    odometryCorrector.disable();
 
     long updateStart, updateEnd;
     prevDistance = -1;
@@ -231,7 +237,7 @@ public class Localizer {
     correctAngle();
 
     // Adjust to starting position
-    switch ((int)startingCorner) {
+    switch ((int) startingCorner) {
       case 0:
         break;
       case 1:
@@ -246,9 +252,7 @@ public class Localizer {
     }
 
     if (wasEnabled)
-      navigation.enableCorrection();
-    
-   
+      odometryCorrector.enable();
   }
 
   /**
@@ -265,15 +269,17 @@ public class Localizer {
    * {@code [0-3]} with 0 being the the upper right corner of the tile where the robot lies, and the
    * range increasing in the counter-clockwise direction.
    * 
-   * @param referenceCorner Reference corner to use for line localization subroutine.
-   * @param refX X coordinate of the reference corner.
-   * @param refY Y coordinate of the reference corner.
+   * @param startingCorner Starting corner of the robot on the grid.
+   * @param LL_x X coordinate of the lower left corner of the robot's team area.
+   * @param LL_y Y coordinate of the lower left corner of the robot's team area.
+   * @param UR_x X coordinate of the upper right corner of the robot's team area.
+   * @param UR_y Y coordinate of the upper right corner of the robot's team area.
    */
   public void lightLocalization(long startingCorner, long LL_x, long LL_y, long UR_x, long UR_y) {
-    boolean wasEnabled = navigation.isCorrectionEnabled();
-    navigation.disableCorrection();
-    
-    switch((int)startingCorner) {
+    boolean wasEnabled = odometryCorrector.isEnabled();
+    odometryCorrector.disable();
+
+    switch ((int) startingCorner) {
       case 0:
         navigation.turnTo(45);
         break;
@@ -287,12 +293,12 @@ public class Localizer {
         navigation.turnTo(135);
         break;
     }
-    
+
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), false);
 
     // Localize in Y
-    switch((int)startingCorner) {
+    switch ((int) startingCorner) {
       case 0:
         navigation.turnTo(0);
         break;
@@ -316,7 +322,7 @@ public class Localizer {
 
     findLine();
     double[] currPosition = odometer.getXYT();
-    switch((int)startingCorner) {
+    switch ((int) startingCorner) {
       case 0:
         odometer.setXYT(currPosition[0], SENSOR_OFFSET, 0);
         break;
@@ -324,7 +330,7 @@ public class Localizer {
         odometer.setXYT(currPosition[0], SENSOR_OFFSET, 0);
         break;
       case 2:
-        odometer.setXYT(currPosition[0], -SENSOR_OFFSET , 180);
+        odometer.setXYT(currPosition[0], -SENSOR_OFFSET, 180);
         break;
       case 3:
         odometer.setXYT(currPosition[0], -SENSOR_OFFSET, 180);
@@ -333,15 +339,11 @@ public class Localizer {
 
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
-    leftMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
-        true);
-    rightMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
-        false);
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
 
     // Localize in X
-    switch((int)startingCorner) {
+    switch ((int) startingCorner) {
       case 0:
         navigation.turnTo(90);
         break;
@@ -365,7 +367,7 @@ public class Localizer {
 
     findLine();
     currPosition = odometer.getXYT();
-    switch((int)startingCorner) {
+    switch ((int) startingCorner) {
       case 0:
         odometer.setXYT(SENSOR_OFFSET, currPosition[1], 90);
         break;
@@ -382,14 +384,10 @@ public class Localizer {
 
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
-    leftMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
-        true);
-    rightMotor.rotate(
-        Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET),
-        false);
+    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
+    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
 
-    switch ((int)startingCorner) {
+    switch ((int) startingCorner) {
       case 0:
         odometer.update(TILE_SIZE * (LL_x + 1), TILE_SIZE * (LL_y + 1), 0);
         break;
@@ -409,7 +407,7 @@ public class Localizer {
     navigation.turnTo(0);
 
     if (wasEnabled)
-      navigation.enableCorrection();
+      odometryCorrector.enable();
   }
 
   /**

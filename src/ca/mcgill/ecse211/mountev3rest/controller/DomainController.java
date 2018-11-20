@@ -1,7 +1,5 @@
 package ca.mcgill.ecse211.mountev3rest.controller;
 
-import java.util.logging.Handler;
-import ca.mcgill.ecse211.mountev3rest.navigation.Display;
 import ca.mcgill.ecse211.mountev3rest.navigation.Localizer;
 import ca.mcgill.ecse211.mountev3rest.navigation.Navigation;
 import ca.mcgill.ecse211.mountev3rest.navigation.Odometer;
@@ -13,13 +11,11 @@ import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
 import ca.mcgill.ecse211.mountev3rest.sensor.UltrasonicPoller;
 import ca.mcgill.ecse211.mountev3rest.util.ArmController;
 import ca.mcgill.ecse211.mountev3rest.util.CoordinateMap;
-import lejos.hardware.Button;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 import lejos.hardware.motor.EV3MediumRegulatedMotor;
 import lejos.hardware.sensor.EV3ColorSensor;
-import lejos.hardware.sensor.EV3GyroSensor;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
 
 /**
@@ -50,11 +46,11 @@ public class DomainController {
   private static final double TILE_SIZE = 30.48;
   private static final double MOTOR_OFFSET = 1.00;
   private static final double SENSOR_OFFSET = 14.6;
-  private static final boolean TRAJECTORY_CORRECTION = true;
 
   // Attributes
   CoordinateMap map;
   Odometer odometer;
+  OdometryCorrector odometryCorrector;
   Navigation navigation;
   Localizer localizer;
   UltrasonicPoller usPoller;
@@ -62,14 +58,9 @@ public class DomainController {
   ArmController armController;
   ColorDetector colorDetector;
 
-  // Temporal
-  EV3LargeRegulatedMotor leftMotor;
-  EV3LargeRegulatedMotor rightMotor;
-
   // Threads
   Thread odoThread;
   Thread navThread;
-  Thread lightThread;
 
   /**
    * Creates a {@code DomainController} and initializes all the required specialized classes.
@@ -85,13 +76,11 @@ public class DomainController {
    * @see LightPoller
    * @see UltrasonicPoller
    */
-  public DomainController(CoordinateMap map) throws OdometerException, PollerException {
-
-    this.map = map;
+  public DomainController() throws OdometerException, PollerException {
 
     // Get motor objects
-    leftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("D"));
-    rightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("A"));
+    EV3LargeRegulatedMotor leftMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("D"));
+    EV3LargeRegulatedMotor rightMotor = new EV3LargeRegulatedMotor(LocalEV3.get().getPort("A"));
     EV3MediumRegulatedMotor colorSensorMotor =
         new EV3MediumRegulatedMotor(LocalEV3.get().getPort("B"));
     EV3MediumRegulatedMotor armMotor = new EV3MediumRegulatedMotor(LocalEV3.get().getPort("C"));
@@ -106,9 +95,11 @@ public class DomainController {
     usPoller = UltrasonicPoller.getUltrasonicPoller(usSensor);
     lightPoller = LightPoller.getLightPoller(topLightSensor, leftLightSensor, rightLightSensor);
     odometer = Odometer.getOdometer(leftMotor, rightMotor, TRACK, WHEEL_RADIUS, MOTOR_OFFSET);
-    navigation = new Navigation(leftMotor, rightMotor, TRAJECTORY_CORRECTION, WHEEL_RADIUS, TRACK,
+    odometryCorrector = new OdometryCorrector(leftMotor, rightMotor, TILE_SIZE, SENSOR_OFFSET);
+    navigation = new Navigation(leftMotor, rightMotor, odometryCorrector, WHEEL_RADIUS, TRACK,
         MOTOR_OFFSET, SENSOR_OFFSET);
-    localizer = new Localizer(leftMotor, rightMotor, navigation, SENSOR_OFFSET, TILE_SIZE);
+    localizer = new Localizer(leftMotor, rightMotor, navigation, odometryCorrector, SENSOR_OFFSET,
+        TILE_SIZE);
     colorDetector = new ColorDetector(LocalEV3.get().getTextLCD(), lightPoller);
     armController = new ArmController(colorSensorMotor, armMotor, leftMotor, rightMotor, navigation,
         colorDetector);
@@ -116,12 +107,17 @@ public class DomainController {
     // Initialize and start the required extra threads
     odoThread = new Thread(odometer);
     navThread = new Thread(navigation);
-    lightThread = new Thread(lightPoller);
     odoThread.start();
     navThread.start();
-    lightThread.start();
+  }
 
-    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
+  /**
+   * Sets the map coordinates to be used during each of the tasks.
+   * 
+   * @param map Map to be used during the tasks.
+   */
+  public void setMap(CoordinateMap map) {
+    this.map = map;
   }
 
   /**
@@ -143,7 +139,7 @@ public class DomainController {
     double LL_dist = navigation.computeDistance(map.TN_LL_x, map.TN_LL_y);
     double UR_dist = navigation.computeDistance(map.TN_UR_x, map.TN_UR_y);
 
-    boolean wasEnabled = navigation.isCorrectionEnabled();
+    boolean wasEnabled = odometryCorrector.isEnabled();
 
     if (map.TN_UR_x - map.TN_LL_x == 2) { // Bridge is placed horizontally.
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
@@ -153,7 +149,7 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToX(map.TN_LL_x - 0.5);
         navigation.waitNavigation();
-        navigation.disableCorrection();
+        odometryCorrector.disable();
         navigation.travelToX(map.TN_UR_x + 1);
         navigation.waitNavigation();
       } else { // Robot is closer to the upper right corner.
@@ -163,7 +159,7 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToX(map.TN_UR_x + 0.5);
         navigation.waitNavigation();
-        navigation.disableCorrection();
+        odometryCorrector.disable();
         navigation.travelToX(map.TN_LL_x - 1);
         navigation.waitNavigation();
       }
@@ -175,7 +171,7 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToY(map.TN_LL_y - 0.5);
         navigation.waitNavigation();
-        navigation.disableCorrection();
+        odometryCorrector.disable();
         navigation.travelToY(map.TN_UR_y + 1);
         navigation.waitNavigation();
       } else { // Robot is closer to the upper right corner.
@@ -185,7 +181,7 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToY(map.TN_UR_y + 0.5);
         navigation.waitNavigation();
-        navigation.disableCorrection();
+        odometryCorrector.disable();
         navigation.travelToY(map.TN_LL_y - 1);
         navigation.waitNavigation();
       }
@@ -194,17 +190,12 @@ public class DomainController {
     localizer.tunnelLocalization();
 
     if (wasEnabled)
-      navigation.enableCorrection();
+      odometryCorrector.enable();
   }
 
   /**
-   * Approaches the tree given by the coordinates and positions the robot looking straight into a
-   * particular face of the tree. The faces of the tree are defined by the range [0, 3] counting
-   * counter-clockwise and starting from the face looking South.
-   * 
-   * @param TG_x X coordinate of the tree.
-   * @param TG_y Y coordinate of the tree.
-   * @param face Face of the tree towards which the robot will be positioned.
+   * Approaches the tree containing the ring set and positions the robot looking into the nearest
+   * face.
    */
   public void approachTree() {
     navigation.travelToY(map.T_y);
@@ -220,118 +211,47 @@ public class DomainController {
     }
     navigation.waitNavigation();
   }
-  
+
+  /**
+   * Moves the robot to the next tree face in the counter-clockwise direction. This method assumes
+   * the the robot is already looking into one of the three faces. This can be achieved by calling
+   * {@code approachTree()}.
+   */
   public void goToNextFace() {
     navigation.turnTo(odometer.getXYT()[2] + 90);
-    leftMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), true);
-    rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), false);
-    
+    navigation.advanceDist(TILE_SIZE);
+
     navigation.turnTo(odometer.getXYT()[2] - 90);
-    leftMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), true);
-    rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, TILE_SIZE), false);
-    
+    navigation.advanceDist(TILE_SIZE);
+
     navigation.turnTo(odometer.getXYT()[2] - 90);
   }
 
   /**
-   * Approaches the closest face of the ring tree and attempts to grab a ring from the higher
-   * location. The light sensor if then used to identify a potential ring color. If no ring is
-   * identified, then the robot attempts to grab a ring from the lower position of the face. Again,
-   * color detection is used to identify a potential ring. If no ring is detected the robot moves to
-   * the next face in the counter-clockwise direction. This keeps going until the robot finds a ring
-   * or visits the four faces of the tree.
-   * <p>
-   * The robot takes an argument denoting the location of the last ring found to accelerate the
-   * search process. The encoding for the ring location is the range {@code [1-8]} where 1 and 2
-   * represent the high and low locations of the tree face looking South respectively and the rest
-   * are defined similarly with the numbers incrementing in the counter-clockwise direction. For
-   * instance,
-   * <p>
-   * {@code lastRingFound = 4}
-   * <p>
-   * Represents the high location of the tree face looking North.
-   * 
-   * @param lastRingFound Location of the last ring found as defined by the encoding. Zero means
-   *        that no rings have been found yet.
-   * 
-   * @return Location of the ring found.
+   * Approaches the tree slowly, detects the color of a ring if any and attempts to get it. This
+   * method assumes that the robot is already looking into a face of the tree and positioned on the
+   * intersection right in front of it. If a color is detected a sequence of beeps matching the
+   * color encoding of the {@code ColorDetector} is issued. After the routine is over the robot goes
+   * back to the initial intersection where is was located before the method call.
    * 
    * @see ColorDetector
    * @see ArmController
    */
-  public int grabRings() {
-    boolean wasEnabled = navigation.isCorrectionEnabled();
-    navigation.disableCorrection();
+  public void grabRings() {
+    boolean wasEnabled = odometryCorrector.isEnabled();
+
+    odometryCorrector.disable();
     armController.getRing();
-    if (wasEnabled) {
-      navigation.enableCorrection();
-    }
-    return 0;
+
+    if (wasEnabled)
+      odometryCorrector.enable();
   }
 
-  /**
-   * Uses the {@code Localizer} and {@code Navigation} classes to move the robot through a set of
-   * defined points for the purpose of testing the navigation capabilities of the system.
-   * Additionally, the method displays the X, Y and Theta parameters of the odometer on the display.
-   * <p>
-   * Localization is optional and can be skipped using the parameters for quick testing of
-   * navigation only.
-   * 
-   * @param localize Tells the method whether it should localize before starting navigation.
-   * @param startCorner Starting corner of the robot on the grid as defined by the {@code Localizer}
-   *        class.
-   * @param points Array of X and Y coordinates to traverse.
-   * @param lcd Display to use to show the odometer values.
-   * 
-   * @throws OdometerException If the odometer has not been instantiated.
-   * 
-   * @see Localizer
-   * @see Navigation
-   */
-  public void testNavigation(boolean localize, int startCorner, double[][] points, TextLCD lcd)
-      throws OdometerException {
-    Display display = new Display(lcd);
-    Thread disThread = new Thread(display);
-    disThread.start();
-
-    // localizer.localize(startCorner, 0, 4, 4, 4);
-    // navigation.travelTo(0, 1);
-    // navigation.waitNavigation();
-    /*
-     * navigation.travelTo(4, 1); navigation.waitNavigation();
-     * 
-     * Button.waitForAnyPress();
-     * 
-     * navigation.travelTo(4, 5); navigation.waitNavigation();
-     * 
-     * Button.waitForAnyPress();
-     */
-
-    // navigation.disableCorrection();
-
-    /*
-     * leftMotor.setSpeed(150); rightMotor.setSpeed(150); leftMotor.forward(); rightMotor.forward();
-     * 
-     * Button.waitForAnyPress();
-     */
-
-    /*odometer.setXYT(TILE_SIZE * 7, TILE_SIZE, 0);
-    crossTunnel();*/
-    
-    navigation.disableCorrection();
-    
-    leftMotor.setSpeed((int)(100 * 1.02));
-    rightMotor.setSpeed(100);
-    
-    leftMotor.rotate(Navigation.convertAngle(WHEEL_RADIUS, TRACK, 90), true);
-    rightMotor.rotate(-Navigation.convertAngle(WHEEL_RADIUS, TRACK, 90), false);
-    
-    /*
-     * localizer.tunnelLocalization(); navigation.travelTo(5, 5); navigation.waitNavigation();
-     */
-    // grabRings(0);
-
+  // REMOVE
+  public void testNavigation() throws OdometerException {
+    navigation.advanceDist(TILE_SIZE * 4);
   }
+
 
   public void testColorDetection(TextLCD lcd) {
     ColorDetector cd = new ColorDetector(lcd, lightPoller);

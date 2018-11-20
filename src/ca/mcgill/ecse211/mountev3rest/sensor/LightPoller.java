@@ -17,7 +17,7 @@ import lejos.robotics.filter.MeanFilter;
  * @author angelortiz
  *
  */
-public class LightPoller extends Thread {
+public class LightPoller {
 
   // Constants
   private static final double LINE_COLOR_VALUE = 0.30; // Minimum value required to treat a sensor
@@ -50,8 +50,11 @@ public class LightPoller extends Thread {
   /**
    * Creates a light poller that uses the provided sensors for polling.
    * 
-   * @param frontSensor
-   * @param leftSensor
+   * @param frontSensor Light sensor placed on the robot arm, set to {@code RGB} mode.
+   * @param leftSensor Light sensor placed to the left of the robot's center, set to {@code Red}
+   *        mode.
+   * @param rightSensor Light sensor placed to the right of the robot's center, set to {@code Red}
+   *        mode.
    */
   private LightPoller(EV3ColorSensor frontSensor, EV3ColorSensor leftSensor,
       EV3ColorSensor rightSensor) {
@@ -82,6 +85,8 @@ public class LightPoller extends Thread {
    * @param frontSensor Light sensor placed on the robot arm, set to {@code RGB} mode.
    * @param leftSensor Light sensor placed to the left of the robot's center, set to {@code Red}
    *        mode.
+   * @param rightSensor Light sensor placed to the right of the robot's center, set to {@code Red}
+   *        mode.
    * 
    * @return New or existing instance of the {@code LightPoller} object.
    */
@@ -111,7 +116,7 @@ public class LightPoller extends Thread {
   /*
    * Updates the light sensor readings and checks for any line detections.
    */
-  public void run() {
+  public void poll() {
     while (true) {
 
       // Front sensor

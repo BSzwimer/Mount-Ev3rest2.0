@@ -67,7 +67,7 @@ public class Odometer extends OdometerData implements Runnable {
    * 
    * @param leftMotor Left motor of the robot.
    * @param rightMotor Right motor of the robot.
-   * @param gyroSensor Gyro sensor object to use for odometry.
+   * @param TRACK Distance between the left and right wheels.
    * @param WHEEL_RADIUS Wheel radius measurement of the robot.
    * @param MOTOR_OFFSET Ratio between the speed of the left and right motors.
    * 
