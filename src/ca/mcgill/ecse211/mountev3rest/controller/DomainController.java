@@ -1,5 +1,6 @@
 package ca.mcgill.ecse211.mountev3rest.controller;
 
+import ca.mcgill.ecse211.mountev3rest.navigation.Display;
 import ca.mcgill.ecse211.mountev3rest.navigation.Localizer;
 import ca.mcgill.ecse211.mountev3rest.navigation.Navigation;
 import ca.mcgill.ecse211.mountev3rest.navigation.Odometer;
@@ -11,6 +12,7 @@ import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
 import ca.mcgill.ecse211.mountev3rest.sensor.UltrasonicPoller;
 import ca.mcgill.ecse211.mountev3rest.util.ArmController;
 import ca.mcgill.ecse211.mountev3rest.util.CoordinateMap;
+import lejos.hardware.Button;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
@@ -41,10 +43,10 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 public class DomainController {
 
   // Constants
-  private static final double TRACK = 8.63;
-  private static final double WHEEL_RADIUS = 2.0;
+  private static final double TRACK = 8.8;
+  private static final double WHEEL_RADIUS = 2.05;
   private static final double TILE_SIZE = 30.48;
-  private static final double MOTOR_OFFSET = 1.00;
+  private static final double MOTOR_OFFSET = 1.015;
   private static final double SENSOR_OFFSET = 14.6;
 
   // Attributes
@@ -95,7 +97,7 @@ public class DomainController {
     usPoller = UltrasonicPoller.getUltrasonicPoller(usSensor);
     lightPoller = LightPoller.getLightPoller(topLightSensor, leftLightSensor, rightLightSensor);
     odometer = Odometer.getOdometer(leftMotor, rightMotor, TRACK, WHEEL_RADIUS, MOTOR_OFFSET);
-    odometryCorrector = new OdometryCorrector(leftMotor, rightMotor, TILE_SIZE, SENSOR_OFFSET);
+    odometryCorrector = new OdometryCorrector(leftMotor, rightMotor, TILE_SIZE, SENSOR_OFFSET, MOTOR_OFFSET);
     navigation = new Navigation(leftMotor, rightMotor, odometryCorrector, WHEEL_RADIUS, TRACK,
         MOTOR_OFFSET, SENSOR_OFFSET);
     localizer = new Localizer(leftMotor, rightMotor, navigation, odometryCorrector, SENSOR_OFFSET,
@@ -249,7 +251,34 @@ public class DomainController {
 
   // REMOVE
   public void testNavigation() throws OdometerException {
-    navigation.advanceDist(TILE_SIZE * 4);
+    
+    TextLCD lcd = LocalEV3.get().getTextLCD();
+    lcd.drawString("      READY      ", 0, 4);
+    
+    //Button.waitForAnyPress();
+    
+    Display display = new Display(lcd);
+    Thread disThread = new Thread(display);
+    disThread.start();
+    
+    try {
+      Thread.sleep(1000);
+    } catch (InterruptedException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+    
+    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
+    navigation.travelToY(6);
+    navigation.waitNavigation();
+    Button.waitForAnyPress();
+    navigation.travelToX(3);
+    navigation.waitNavigation();
+    
+    lcd.clear();
+    lcd.drawString("       DONE       ", 0, 4);
+    
+    Button.waitForAnyPress();
   }
 
 

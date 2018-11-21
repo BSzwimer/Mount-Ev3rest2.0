@@ -19,9 +19,11 @@ public class OdometryCorrector {
 
   // Constants
   private static final int CORRECTION_TIME_LIMIT = 2200;
-  private static final int FORWARD_SPEED = 120;
-  private static final int CORRECTION_PERIOD = 25;
+  private static final int FORWARD_SPEED = 80;
+  private static final int ROTATE_SPEED = 80;
+  private static final int CORRECTION_PERIOD = 20;
   private final double TILE_SIZE;
+  private final double MOTOR_OFFSET;
   private final double SENSOR_OFFSET;
 
   // Attributes
@@ -44,7 +46,7 @@ public class OdometryCorrector {
    * @throws OdometerException If the {@code Odometer} has not been instantiated.
    */
   public OdometryCorrector(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
-      final double TILE_SIZE, final double SENSOR_OFFSET)
+      final double TILE_SIZE, final double SENSOR_OFFSET, final double MOTOR_OFFSET)
       throws PollerException, OdometerException {
 
     // Get navigation objects
@@ -56,6 +58,7 @@ public class OdometryCorrector {
     // Initialize correction objects
     this.TILE_SIZE = TILE_SIZE;
     this.SENSOR_OFFSET = SENSOR_OFFSET;
+    this.MOTOR_OFFSET = MOTOR_OFFSET;
     
     leftInLine = false;
     leftInLine = false;
@@ -79,6 +82,10 @@ public class OdometryCorrector {
     lightPoller.poll(); // Update the sensor readings
     boolean ret = false;
 
+    if (lightPoller.leftInLine && lightPoller.rightInLine) {
+      return ret;
+    }
+    
     if (lightPoller.leftInLine) {
       if (!leftInLine) {
         leftInLine = true;
@@ -88,6 +95,9 @@ public class OdometryCorrector {
     } else {
       leftInLine = false;
     }
+    
+    if (ret)
+      return ret;
 
     if (lightPoller.rightInLine) {
       if (!rightInLine) {
@@ -168,6 +178,7 @@ public class OdometryCorrector {
 
     System.out.println("Current line: " + currentLine);
     System.out.println("x: " + odometer.getXYT()[0] + "y: " + odometer.getXYT()[1]);
+    Sound.beep();
 
     if (lastCorrection == currentLine) {
       return false;
@@ -179,50 +190,71 @@ public class OdometryCorrector {
 
     // Correct the direction
     if (laggingSide == 0) {
-      rightMotor.setSpeed(0);
+      lightPoller.poll();
+      while (!lightPoller.rightInLine) {
+        lightPoller.poll();
+        leftMotor.setSpeed((int)(ROTATE_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(ROTATE_SPEED);
+        leftMotor.backward();
+        rightMotor.backward();
+      }
+      rightMotor.stop(true);
+      leftMotor.stop(true);
       leftMotor.setSpeed(FORWARD_SPEED / 2);
+      leftMotor.forward();
       prevTacho = leftMotor.getTachoCount();
       while (true) {
+        lightPoller.poll();
         if (lightPoller.leftInLine) {
-          leftMotor.setSpeed(0);
-          rightMotor.setSpeed(0);
+          leftMotor.stop(true);
+          rightMotor.stop(true);
           break;
         } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
           goBack = true;
           break;
-        }
-        try {
-          Thread.sleep(CORRECTION_PERIOD);
-        } catch (InterruptedException e) {
         }
       }
     } else if (laggingSide == 1) {
-      leftMotor.setSpeed(0);
+      lightPoller.poll();
+      while (!lightPoller.leftInLine) {
+        lightPoller.poll();
+        leftMotor.setSpeed((int)(ROTATE_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(ROTATE_SPEED);
+        leftMotor.backward();
+        rightMotor.backward();
+      }
+      leftMotor.stop(true);
+      rightMotor.stop(true);
       rightMotor.setSpeed(FORWARD_SPEED / 2);
+      rightMotor.forward();
       prevTacho = rightMotor.getTachoCount();
       while (true) {
+        lightPoller.poll();
         if (lightPoller.rightInLine) {
-          leftMotor.setSpeed(0);
-          rightMotor.setSpeed(0);
+          leftMotor.stop(true);
+          rightMotor.stop(true);
           break;
         } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
           goBack = true;
           break;
         }
-        try {
-          Thread.sleep(CORRECTION_PERIOD);
-        } catch (InterruptedException e) {
-        }
       }
     }
-
+    
+    if (direction == Direction.NORTH || direction == Direction.SOUTH)
+      lastYCorrection = currentLine;
+    else if (direction == Direction.EAST || direction == Direction.WEST)
+      lastXCorrection = currentLine;
+    
     if (goBack) {
+      leftMotor.setSpeed((int)(ROTATE_SPEED * MOTOR_OFFSET));
+      rightMotor.setSpeed(ROTATE_SPEED);
       if (laggingSide == 0)
-        leftMotor.rotate(prevTacho - leftMotor.getTachoCount());
+        leftMotor.rotate((int)((prevTacho - leftMotor.getTachoCount()) * MOTOR_OFFSET));
       else if (laggingSide == 1)
         rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
 
-      return false;
+      return true;
     }
 
     // Correct the theta value of the odometer
@@ -246,11 +278,6 @@ public class OdometryCorrector {
         break;
       default:
     }
-
-    if (direction == Direction.NORTH || direction == Direction.SOUTH)
-      lastYCorrection = currentLine;
-    else if (direction == Direction.EAST || direction == Direction.WEST)
-      lastXCorrection = currentLine;
 
     return true;
   }

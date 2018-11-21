@@ -90,7 +90,8 @@ public class LightPoller {
    * 
    * @return New or existing instance of the {@code LightPoller} object.
    */
-  public static LightPoller getLightPoller(EV3ColorSensor frontSensor, EV3ColorSensor leftSensor, EV3ColorSensor rightSensor) {
+  public static LightPoller getLightPoller(EV3ColorSensor frontSensor, EV3ColorSensor leftSensor,
+      EV3ColorSensor rightSensor) {
     if (lightPoller == null) {
       lightPoller = new LightPoller(frontSensor, leftSensor, rightSensor);
       return lightPoller;
@@ -117,28 +118,20 @@ public class LightPoller {
    * Updates the light sensor readings and checks for any line detections.
    */
   public void poll() {
-    while (true) {
+    // Front sensor
+    frontProvider.fetchSample(front, 0);
+    frontFilter.fetchSample(frontMean, 0);
 
-      // Front sensor
-      frontProvider.fetchSample(front, 0);
-      frontFilter.fetchSample(frontMean, 0);
+    // Left sensor
+    leftProvider.fetchSample(left, 0);
+    leftFilter.fetchSample(leftMean, 0);
 
-      // Left sensor
-      leftProvider.fetchSample(left, 0);
-      leftFilter.fetchSample(leftMean, 0);
-      
-      // Right sensor
-      rightProvider.fetchSample(right, 0);
-      rightFilter.fetchSample(rightMean, 0);
+    // Right sensor
+    rightProvider.fetchSample(right, 0);
+    rightFilter.fetchSample(rightMean, 0);
 
-      // Update line detection values
-      lineDetection();
-
-      try {
-        Thread.sleep(10);
-      } catch (Exception e) {
-      }
-    }
+    // Update line detection values
+    lineDetection();
   }
 
   /**
@@ -146,20 +139,13 @@ public class LightPoller {
    */
   private void lineDetection() {
     if (leftMean[0] < LINE_COLOR_VALUE) {
-      if (!leftInLine) {
-        leftInLine = true;
-        Sound.beep();
-      }
+      leftInLine = true;
     } else {
       leftInLine = false;
     }
-    
+
     if (rightMean[0] < LINE_COLOR_VALUE) {
-      if (!rightInLine) {
-        rightInLine = true;
-        Sound.beep();
-        Sound.beep();
-      }
+      rightInLine = true;
     } else {
       rightInLine = false;
     }

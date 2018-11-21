@@ -23,9 +23,9 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class Navigation implements Runnable {
 
   // Class constants
-  private static final int FORWARD_SPEED = 120;
+  private static final int FORWARD_SPEED = 100;
   private static final int ROTATE_SPEED = 80;
-  private static final int NAVIGATION_PERIOD = 25;
+  private static final int NAVIGATION_PERIOD = 30;
   private static final double TILE_SIZE = 30.48;
   private static final int MIN_TRAVEL_DISTANCE = 1;
   private static final int MIN_STATIC_INTERVAL = 400;
@@ -106,6 +106,7 @@ public class Navigation implements Runnable {
   @Override
   public void run() {
     long updateStart, updateEnd;
+    boolean corrected = false;
 
     while (true) {
       updateStart = System.currentTimeMillis();
@@ -119,15 +120,16 @@ public class Navigation implements Runnable {
         directionChanged = false;
       }
 
-      // Correct the trajectory if necesarry
-      if (odometryCorrector.applyCorrection()) {
-        directionChanged = true;
-        isNavigating = true;
-      }
-
       // Set this flag to let other threads know that the robot is currently reaching a waypoint
       if (!leftMotor.isMoving() && !rightMotor.isMoving())
         isNavigating = false;
+      
+      // Correct the trajectory if necessary
+      corrected = odometryCorrector.applyCorrection();
+      if (corrected) {
+        directionChanged = true;
+        isNavigating = true;
+      }
 
       // This ensures that the navigator only runs once every period
       updateEnd = System.currentTimeMillis();
@@ -233,7 +235,7 @@ public class Navigation implements Runnable {
    * @param theta Desired angle of rotation.
    */
   public void turnToRelative(double theta) {
-    leftMotor.setSpeed(ROTATE_SPEED);
+    leftMotor.setSpeed((int) (ROTATE_SPEED * MOTOR_OFFSET));
     rightMotor.setSpeed(ROTATE_SPEED);
     leftMotor.rotate(convertAngle(WHEEL_RADIUS, TRACK, theta), true);
     rightMotor.rotate(-convertAngle(WHEEL_RADIUS, TRACK, theta), false);
@@ -246,7 +248,9 @@ public class Navigation implements Runnable {
    * @param dist Distance to travel forward in centimeters.
    */
   public void advanceDist(double dist) {
-    leftMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, dist), true);
+    leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+    rightMotor.setSpeed(FORWARD_SPEED);
+    leftMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, dist * MOTOR_OFFSET), true);
     rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, dist), false);
   }
 
@@ -344,13 +348,13 @@ public class Navigation implements Runnable {
         leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(FORWARD_SPEED);
         leftMotor.rotate((int) (convertDistance(WHEEL_RADIUS, -dist) * MOTOR_OFFSET), true);
-        rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), false);
+        rightMotor.rotate(convertDistance(WHEEL_RADIUS, -dist), true);
       } else {
         turnTo(0);
         leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(FORWARD_SPEED);
         leftMotor.rotate((int) (convertDistance(WHEEL_RADIUS, dist) * MOTOR_OFFSET), true);
-        rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), false);
+        rightMotor.rotate(convertDistance(WHEEL_RADIUS, dist), true);
       }
     }
   }
