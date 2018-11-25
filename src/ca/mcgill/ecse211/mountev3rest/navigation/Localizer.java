@@ -22,10 +22,11 @@ public class Localizer {
 
   // Constants
   private static final int LOCALIZATION_PERIOD = 25;
-  private static final int ROTATE_SPEED = 80;
-  private static final int FORWARD_SPEED = 120;
-  private static final int THRESHOLD = 45;
-  private static final int CORRECTION_TIME_LIMIT = 2500;
+  private static final int US_LOCALIZATION_PERIOD = 10;
+  private static final int MIN_US_DETECTIONS = 1;
+  private static final int ROTATE_SPEED = 120;
+  private static final int FORWARD_SPEED = 100;
+  private static final int APROX_DIST = 4;
   private final double SENSOR_OFFSET;
   private final double TILE_SIZE;
 
@@ -51,13 +52,14 @@ public class Localizer {
    * @param leftMotor Lower left motor of the robot.
    * @param rightMotor Lower right motor of the robot.
    * @param navigation Navigation object to move the robot on the grid.
+   * @param odometryCorrector Object used to align the robot to a line during light localization.
    * @param SENSOR_OFFSET Distance between the lower light sensor and the robot's center.
-   * @param SENSOR_OFFSET_ANGLE Angle between the lower light sensor and the robot's center.
    * @param TILE_SIZE Size of a tile in the grid in centimeters.
    * 
    * @throws OdometerException If the {@code Odometer} has not been instantiated.
    * @throws PollerException If the {@code UltrasonicPoller} of the {@code LightPoller} classes have
    *         not been instantiated.
+   * 
    * @see Odometer
    */
   public Localizer(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
@@ -142,6 +144,7 @@ public class Localizer {
       case WEST:
         odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
         break;
+      case INIT:
     }
 
     leftMotor.setSpeed(FORWARD_SPEED);
@@ -155,9 +158,9 @@ public class Localizer {
   }
 
   /**
-   * Performs falling edge ultrasonic localization to correct the angle Theta of the odometer and
-   * then it uses light localization to get the correct values of the X and Y coordinates of the
-   * robot's location. The values obtained are used to overwrite the odometer's current values.
+   * Performs ultrasonic localization to correct the angle Theta of the odometer and then it uses
+   * light localization to get the correct values of the X and Y coordinates of the robot's
+   * location. The values obtained are used to overwrite the odometer's current values.
    * <p>
    * The starting corner parameter is used to adjust the odometer values according the the absolute
    * set of coordinated on the map. The corners are defined using the range {@code [0-3]} with 0
@@ -171,13 +174,12 @@ public class Localizer {
    */
   public void localize(long startingCorner, long LL_x, long LL_y, long UR_x, long UR_y) {
     ultrasonicLocalization(startingCorner);
-
     lightLocalization(startingCorner, LL_x, LL_y, UR_x, UR_y);
   }
 
   /**
-   * Estimates the angle of the robot with respect to the grid by rotating until a falling edge is
-   * detected with the wall on each side. The angle in the middle of the two falling edge detections
+   * Estimates the angle of the robot with respect to the grid by rotating until a rising edge is
+   * detected with the wall on each side. The angle in the middle of the two rising edge detections
    * is used to estimate the robot's real angle.
    * 
    * @param startingCorner Starting corner of the robot on the grid.
@@ -189,13 +191,16 @@ public class Localizer {
     long updateStart, updateEnd;
     prevDistance = -1;
     boolean firstSearch = true;
+    int counter = 0;
 
     leftMotor.setSpeed(ROTATE_SPEED);
     rightMotor.setSpeed(ROTATE_SPEED);
     leftMotor.forward();
     rightMotor.backward();
 
-    // Falling edge localization
+    boolean highDelta = false;
+
+    // Localization
     while (true) {
       updateStart = System.currentTimeMillis();
       currDistance = usPoller.poll();
@@ -203,34 +208,58 @@ public class Localizer {
         prevDistance = currDistance;
         continue;
       }
-      if (prevDistance >= currDistance && prevDistance > THRESHOLD) { // Distance increasing
-        if (!measurementTaken && currDistance < THRESHOLD) {
-          if (firstSearch) {
-            beta = odometer.getXYT()[2];
-            leftMotor.backward();
-            rightMotor.forward();
-            firstSearch = false;
-            Sound.beep();
-            measurementTaken = true;
-          } else {
-            alpha = odometer.getXYT()[2];
-            leftMotor.setSpeed(0);
-            rightMotor.setSpeed(0);
-            Sound.beep();
-            break;
-          }
-        }
-      } else if (prevDistance < currDistance) { // Distance decreasing
-        measurementTaken = false;
+
+      //System.out.println(String.format("Prev: %d, Curr: %d  |  Count: %d  |  Low: %d, High: %d",
+      //    prevDistance, currDistance, counter, lowDist, highDist));
+
+      // FALLING EDGE
+      if (prevDistance > currDistance) { // Distance decreasing
+        counter++;
+        if (prevDistance - currDistance > 35)
+          highDelta = true;
+      } else if (prevDistance < currDistance) {
+        counter = 0;
+        highDelta = false;
+        //System.out.println("OFF");
       }
+      
+      // Check if edge conditions are met
+      if (counter >= MIN_US_DETECTIONS && highDelta && currDistance < 40) {
+        if (firstSearch) {
+          beta = odometer.getXYT()[2];
+          leftMotor.backward();
+          rightMotor.forward();
+
+          firstSearch = false;
+          counter = 0;
+          highDelta = false;
+          
+          //System.out.println("FIRST");
+
+          // Don't start checking again right away
+          try {
+            Thread.sleep(500);
+          } catch (InterruptedException e) {
+            e.printStackTrace();
+          }
+        } else {
+          alpha = odometer.getXYT()[2];
+          leftMotor.setSpeed(0);
+          rightMotor.setSpeed(0);
+
+          //System.out.println("SECOND");
+          
+          break;
+        }
+      }
+      
       prevDistance = currDistance;
-      // This ensures that the navigator only runs once every period
+      // This ensures that the localizer only runs once every period
       updateEnd = System.currentTimeMillis();
-      if (updateEnd - updateStart < LOCALIZATION_PERIOD) {
+      if (updateEnd - updateStart < US_LOCALIZATION_PERIOD) {
         try {
-          Thread.sleep(LOCALIZATION_PERIOD - (updateEnd - updateStart));
+          Thread.sleep(US_LOCALIZATION_PERIOD - (updateEnd - updateStart));
         } catch (InterruptedException e) {
-          // there is nothing to be done
         }
       }
     }
@@ -259,15 +288,13 @@ public class Localizer {
    * Provides a more accurate set of values for X, Y and Theta to the odometer by using light
    * localization.
    * <p>
-   * The light localization routine consists of approaching the reference corner and spinning until
-   * four line detections are recorded. The the angles recorded during the line detections are used
-   * to correct the odometer values.
+   * The light localization routine consists of moving forward in the X and Y directions until a
+   * line is detected. Once the detection occurs, the robot is aligned with the line under it using
+   * the other light sensor. Then both the Theta and X or Y coordinates are updated on the odometer
+   * using the current knowledge of the robots location.
    * <p>
-   * This method requires that the robot is placed around the middle of a tile and that the odometer
-   * knows the angle of the robot to some degree of accuracy. A reference corner and its coordinates
-   * must be provided to use to do the localization. The corners are encoded using the range
-   * {@code [0-3]} with 0 being the the upper right corner of the tile where the robot lies, and the
-   * range increasing in the counter-clockwise direction.
+   * The starting corner parameter allows the method to the initial coordinates of the robot
+   * according to the absolute coordinate system defined by the grid.
    * 
    * @param startingCorner Starting corner of the robot on the grid.
    * @param LL_x X coordinate of the lower left corner of the robot's team area.
@@ -279,6 +306,7 @@ public class Localizer {
     boolean wasEnabled = odometryCorrector.isEnabled();
     odometryCorrector.disable();
 
+    // Try to get closer to the nearest intersection
     switch ((int) startingCorner) {
       case 0:
         navigation.turnTo(45);
@@ -293,11 +321,27 @@ public class Localizer {
         navigation.turnTo(135);
         break;
     }
-
-    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), true);
-    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 15), false);
+    
+    leftMotor.setSpeed((int)(FORWARD_SPEED * navigation.MOTOR_OFFSET));
+    rightMotor.setSpeed(FORWARD_SPEED);
+    leftMotor.forward();
+    rightMotor.forward();
+    
+    lightPoller.poll();
+    while(!lightPoller.leftInLine && !lightPoller.rightInLine) {
+      try {
+        Thread.sleep(LOCALIZATION_PERIOD);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+      lightPoller.poll();
+    }
+    
+    navigation.advanceDist(APROX_DIST);
+    navigation.waitNavigation();
 
     // Localize in Y
+    // Rotate to look into the +Y direction
     switch ((int) startingCorner) {
       case 0:
         navigation.turnTo(0);
@@ -313,14 +357,10 @@ public class Localizer {
         break;
     }
 
-    double[] initialPosition = odometer.getXYT();
-
-    leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);
-    leftMotor.forward();
-    rightMotor.forward();
-
+    // Move forward until a line is detected and the robot is aligned with it
     findLine();
+
+    // Now correct the values of the odometer.
     double[] currPosition = odometer.getXYT();
     switch ((int) startingCorner) {
       case 0:
@@ -337,12 +377,14 @@ public class Localizer {
         break;
     }
 
+    // Position the axis of the robot back on the line
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
 
     // Localize in X
+    // Rotate to look into the +X direction
     switch ((int) startingCorner) {
       case 0:
         navigation.turnTo(90);
@@ -358,14 +400,10 @@ public class Localizer {
         break;
     }
 
-    initialPosition = odometer.getXYT();
-
-    leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);
-    leftMotor.forward();
-    rightMotor.forward();
-
+    // Move forward until a line is detected and the robot is aligned with it
     findLine();
+
+    // Now correct the values of the odometer.
     currPosition = odometer.getXYT();
     switch ((int) startingCorner) {
       case 0:
@@ -382,11 +420,14 @@ public class Localizer {
         break;
     }
 
+    // Position the axis of the robot back on the line
     leftMotor.setSpeed(FORWARD_SPEED);
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
     rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
 
+
+    // Adjust the correction for the starting corner of the robot
     switch ((int) startingCorner) {
       case 0:
         odometer.update(TILE_SIZE * (LL_x + 1), TILE_SIZE * (LL_y + 1), 0);
@@ -402,101 +443,43 @@ public class Localizer {
         break;
     }
 
-
-    navigation.waitNavigation();
-    navigation.turnTo(0);
-
     if (wasEnabled)
       odometryCorrector.enable();
   }
 
   /**
-   * TODO
+   * Moves forward until one of the sensors detects a line. Once a line is detected a
+   * {@code OdometryCorrector} method is called to align the other side.
    */
   private void findLine() {
-    boolean leftInLine = false;
-    boolean rightInLine = true;
+    leftMotor.setSpeed((int) (FORWARD_SPEED * navigation.MOTOR_OFFSET));
+    rightMotor.setSpeed(FORWARD_SPEED);
 
-    while (true) {
-      if (lightPoller.leftInLine) {
-        if (!leftInLine) {
-          leftInLine = true;
-          if (!lightPoller.rightInLine)
-            adjustTrajectory(1);
-          leftMotor.setSpeed(0);
-          rightMotor.setSpeed(0);
-          break;
-        }
-      } else {
-        leftInLine = false;
-      }
+    leftMotor.forward();
+    rightMotor.forward();
 
-      if (lightPoller.rightInLine) {
-        if (!rightInLine) {
-          rightInLine = true;
-          if (!lightPoller.leftInLine)
-            adjustTrajectory(0);
-          leftMotor.setSpeed(0);
-          rightMotor.setSpeed(0);
-          break;
-        }
-      } else {
-        rightInLine = false;
+    lightPoller.poll();
+    while (!lightPoller.leftInLine && !lightPoller.rightInLine) {
+      try {
+        Thread.sleep(LOCALIZATION_PERIOD);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
       }
-    }
-  }
-
-  /**
-   * TODO
-   * 
-   * @param laggingSide
-   */
-  private void adjustTrajectory(int laggingSide) {
-    boolean goBack = false;
-    long startTime = System.currentTimeMillis();
-    int prevTacho = 0;
-
-    // Correct the direction
-    if (laggingSide == 0) {
-      rightMotor.setSpeed(0);
-      leftMotor.setSpeed(ROTATE_SPEED);
-      prevTacho = leftMotor.getTachoCount();
-      while (true) {
-        if (lightPoller.leftInLine) {
-          break;
-        } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
-          goBack = true;
-          break;
-        }
-        try {
-          Thread.sleep(LOCALIZATION_PERIOD);
-        } catch (InterruptedException e) {
-        }
-      }
-    } else if (laggingSide == 1) {
-      leftMotor.setSpeed(0);
-      rightMotor.setSpeed(ROTATE_SPEED);
-      prevTacho = rightMotor.getTachoCount();
-      while (true) {
-        if (lightPoller.rightInLine) {
-          break;
-        } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
-          goBack = true;
-          break;
-        }
-        try {
-          Thread.sleep(LOCALIZATION_PERIOD);
-        } catch (InterruptedException e) {
-        }
-      }
+      lightPoller.poll();
     }
 
-    if (goBack) {
-      if (laggingSide == 0)
-        leftMotor.rotate(prevTacho - leftMotor.getTachoCount());
-      else if (laggingSide == 1)
-        rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
-      return;
+    boolean lineDetected = false;
+
+    lightPoller.poll();
+    while (!lineDetected) {
+      if (lightPoller.leftInLine && lightPoller.rightInLine) {
+        return;
+      } else if (lightPoller.leftInLine)
+        lineDetected = odometryCorrector.rotateUntilDetection(1);
+      else if (lightPoller.rightInLine)
+        lineDetected = odometryCorrector.rotateUntilDetection(0);
+
+      lightPoller.poll();
     }
   }
 
@@ -512,6 +495,9 @@ public class Localizer {
     } else {
       correctedTheta = position[2] + 225 - ((alpha + beta) / 2);
     }
+
+    correctedTheta = (correctedTheta + 180) % 360;
+
     odometer.setTheta(correctedTheta);
   }
 

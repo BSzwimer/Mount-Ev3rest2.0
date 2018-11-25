@@ -6,11 +6,13 @@ import lejos.hardware.Sound;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 
 /**
- * Uses line detection on the lower light sensor of the robot to provide periodic corrections to the
- * odometer location estimations.
+ * This class used line detection on the lower light sensor of the robot to provide periodic
+ * corrections to the odometer location estimations and the robot's direction.
  * <p>
- * Once instantiated and running, the {@code OdometryCorrector} class runs as a separate thread on
- * the background silently providing corrections to the odometer when lines are detected.
+ * This class corrects the trajectory of the robot by ensuring that both light sensors align with
+ * each line traversed, effectively setting the robot's heading to a right angle. Then it adjusts
+ * the odometer values by estimating the line that was traversed and using the provided tile size
+ * measurement.
  * 
  * @author angelortiz
  *
@@ -18,10 +20,11 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class OdometryCorrector {
 
   // Constants
-  private static final int CORRECTION_TIME_LIMIT = 2200;
+  private static final int CORRECTION_TIME_LIMIT = 2700;
   private static final int FORWARD_SPEED = 80;
+  private static final int CORRECTION_SPEED = 60;
   private static final int ROTATE_SPEED = 80;
-  private static final int CORRECTION_PERIOD = 20;
+  private static final int CORRECTION_PERIOD = 50;
   private final double TILE_SIZE;
   private final double MOTOR_OFFSET;
   private final double SENSOR_OFFSET;
@@ -40,7 +43,15 @@ public class OdometryCorrector {
   private int lastYCorrection;
 
   /**
-   * Creates an {@code OdometryCorrector} that is to be run on its own thread.
+   * Creates an {@code OdometryCorrector} that can be called during navigation.
+   * 
+   * @param leftMotor Left motor used to correct the trajectory.
+   * @param rightMotor Right motor used to correct the trajectory.
+   * @param TILE_SIZE Length of the tiles on the grid in centimeters.
+   * @param SENSOR_OFFSET Vertical distance from the robot's axis to the lower light sensors in
+   *        centimeters.
+   * @param MOTOR_OFFSET Ratio between the speed of the left and right motors used to reduce the
+   *        error between the motors' different performances.
    * 
    * @throws PollerException If the {@code LightPoller} has not been instantiated.
    * @throws OdometerException If the {@code Odometer} has not been instantiated.
@@ -59,7 +70,7 @@ public class OdometryCorrector {
     this.TILE_SIZE = TILE_SIZE;
     this.SENSOR_OFFSET = SENSOR_OFFSET;
     this.MOTOR_OFFSET = MOTOR_OFFSET;
-    
+
     leftInLine = false;
     leftInLine = false;
     lastXCorrection = -1;
@@ -70,9 +81,14 @@ public class OdometryCorrector {
 
   /**
    * Applies trajectory and odometry correction by detecting the lines on the floor with the two
-   * light sensors. If correction is desabled the method returns immediately.
+   * light sensors. If correction is disabled or the robot just applied correction on this line the
+   * method returns immediately.
+   * <p>
+   * This method actively changes the heading of the robot to be aligned to the line being
+   * traversed, and overwrites the values of the odometer by estimating the number of line that was
+   * detected as well as the dierection and the measurement of the tile length provided.
    * 
-   * @return 1 if the correction was applied, 0 otherwise.
+   * @return True if the correction was applied, false otherwise.
    */
   public boolean applyCorrection() {
     // Return if correction is disabled.
@@ -85,7 +101,7 @@ public class OdometryCorrector {
     if (lightPoller.leftInLine && lightPoller.rightInLine) {
       return ret;
     }
-    
+
     if (lightPoller.leftInLine) {
       if (!leftInLine) {
         leftInLine = true;
@@ -95,7 +111,7 @@ public class OdometryCorrector {
     } else {
       leftInLine = false;
     }
-    
+
     if (ret)
       return ret;
 
@@ -116,8 +132,8 @@ public class OdometryCorrector {
    * Estimates the closest line to the robot according to the odometer's readings and the current
    * heading.
    * 
-   * @return An integer indicating the closest line to the robot on the grid according with respect
-   *         to the robot's current heading.
+   * @return An integer indicating the closest line to the robot on the grid according to the
+   *         robot's current heading.
    */
   public int estimateCurrentLine() {
     updateDirection();
@@ -160,11 +176,13 @@ public class OdometryCorrector {
    * Adjusts the trajectory of the robot by stopping the leading side and waiting until the lagging
    * side sees a line. In case the lagging side takes too long to see a line, the rotation caused by
    * stopping one of the wheels is reversed and the method returns.
+   * <p>
+   * If the method determines that it just corrected using this line it returns false immediately.
    * 
    * @param laggingSide Integer denoting which side is lagging. The encoding is 0 for left and 1 for
    *        right.
    * 
-   * @return
+   * @return True if a correction was actually applied to the odometer, false otherwise.
    */
   public boolean adjustTrajectory(int laggingSide) {
     // Check that this line is no the same as the one for the past correction.
@@ -176,116 +194,257 @@ public class OdometryCorrector {
 
     int currentLine = estimateCurrentLine();
 
-    System.out.println("Current line: " + currentLine);
-    System.out.println("x: " + odometer.getXYT()[0] + "y: " + odometer.getXYT()[1]);
-    Sound.beep();
+    /*
+     * System.out.println("Current line: " + currentLine + "Direction: " + direction);
+     * System.out.println("x: " + odometer.getXYT()[0] + "y: " + odometer.getXYT()[1]);
+     * Sound.beep();
+     */
 
+    // If the last correction was on this line do nothing
     if (lastCorrection == currentLine) {
       return false;
     }
+    
+    Sound.beep();
 
-    boolean goBack = false;
-    long startTime = System.currentTimeMillis();
-    int prevTacho = 0;
+    boolean lineDetected = false;
 
-    // Correct the direction
+    // Correct the trajectory
+    rightMotor.stop(true);
+    leftMotor.stop(false);
+
+    // Lagging side is left
     if (laggingSide == 0) {
       lightPoller.poll();
+      
+      int prevTachoLeft = leftMotor.getTachoCount();
+      int prevTachoRight = rightMotor.getTachoCount();
+      long startTime = System.currentTimeMillis();
+      boolean goBack = false;
+
+      // Make sure you didn't skip the line while stopping
       while (!lightPoller.rightInLine) {
         lightPoller.poll();
-        leftMotor.setSpeed((int)(ROTATE_SPEED * MOTOR_OFFSET));
-        rightMotor.setSpeed(ROTATE_SPEED);
+        leftMotor.setSpeed((int) (CORRECTION_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(CORRECTION_SPEED);
         leftMotor.backward();
         rightMotor.backward();
-      }
-      rightMotor.stop(true);
-      leftMotor.stop(true);
-      leftMotor.setSpeed(FORWARD_SPEED / 2);
-      leftMotor.forward();
-      prevTacho = leftMotor.getTachoCount();
-      while (true) {
-        lightPoller.poll();
-        if (lightPoller.leftInLine) {
-          leftMotor.stop(true);
-          rightMotor.stop(true);
-          break;
-        } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
-          goBack = true;
+        
+        if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+          goBack = true; // If the line is never seen signal the method to undo the turning
           break;
         }
+        
+        try {
+          Thread.sleep(CORRECTION_PERIOD);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
       }
+      
+      // Undo the previous travel
+      if (goBack) {
+        leftMotor.rotate(prevTachoLeft - leftMotor.getTachoCount());
+        rightMotor.rotate(prevTachoRight - rightMotor.getTachoCount());
+      }
+      
+      rightMotor.stop(true);
+      leftMotor.stop(false);
+      
+      try {
+        Thread.sleep(200);
+      } catch (InterruptedException e1) {
+        e1.printStackTrace();
+      }
+
+      // Correct the lagging wheel
+      lineDetected = rotateUntilDetection(0);
+
+      if (direction == Direction.NORTH || direction == Direction.SOUTH) {
+        lastYCorrection = currentLine;
+        lastXCorrection = 0;
+      } else if (direction == Direction.EAST || direction == Direction.WEST) {
+        lastXCorrection = currentLine;
+        lastYCorrection = 0;
+      }
+
+      // Lagging side is right
     } else if (laggingSide == 1) {
       lightPoller.poll();
+      
+      int prevTachoLeft = leftMotor.getTachoCount();
+      int prevTachoRight = rightMotor.getTachoCount();
+      long startTime = System.currentTimeMillis();
+      boolean goBack = false;
+
+      // Make sure you didn't skip the line while stopping
       while (!lightPoller.leftInLine) {
         lightPoller.poll();
-        leftMotor.setSpeed((int)(ROTATE_SPEED * MOTOR_OFFSET));
-        rightMotor.setSpeed(ROTATE_SPEED);
+        leftMotor.setSpeed((int) (CORRECTION_SPEED * MOTOR_OFFSET));
+        rightMotor.setSpeed(CORRECTION_SPEED);
         leftMotor.backward();
         rightMotor.backward();
-      }
-      leftMotor.stop(true);
-      rightMotor.stop(true);
-      rightMotor.setSpeed(FORWARD_SPEED / 2);
-      rightMotor.forward();
-      prevTacho = rightMotor.getTachoCount();
-      while (true) {
-        lightPoller.poll();
-        if (lightPoller.rightInLine) {
-          leftMotor.stop(true);
-          rightMotor.stop(true);
-          break;
-        } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
-          goBack = true;
+        
+        if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+          goBack = true; // If the line is never seen signal the method to undo the turning
           break;
         }
+        
+        try {
+          Thread.sleep(CORRECTION_PERIOD);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
       }
-    }
-    
-    if (direction == Direction.NORTH || direction == Direction.SOUTH)
-      lastYCorrection = currentLine;
-    else if (direction == Direction.EAST || direction == Direction.WEST)
-      lastXCorrection = currentLine;
-    
-    if (goBack) {
-      leftMotor.setSpeed((int)(ROTATE_SPEED * MOTOR_OFFSET));
-      rightMotor.setSpeed(ROTATE_SPEED);
-      if (laggingSide == 0)
-        leftMotor.rotate((int)((prevTacho - leftMotor.getTachoCount()) * MOTOR_OFFSET));
-      else if (laggingSide == 1)
-        rightMotor.rotate(prevTacho - rightMotor.getTachoCount());
+      
+      // Undo the previous travel
+      if (goBack) {
+        leftMotor.rotate(prevTachoLeft - leftMotor.getTachoCount());
+        rightMotor.rotate(prevTachoRight - rightMotor.getTachoCount());
+      }
+      
+      leftMotor.stop(true);
+      rightMotor.stop(false);
+      
+      try {
+        Thread.sleep(200);
+      } catch (InterruptedException e1) {
+        e1.printStackTrace();
+      }
 
-      return true;
+      // Correct the lagging wheel
+      lineDetected = rotateUntilDetection(1);
+
+      if (direction == Direction.NORTH || direction == Direction.SOUTH) {
+        lastYCorrection = currentLine;
+        lastXCorrection = 0;
+      } else if (direction == Direction.EAST || direction == Direction.WEST) {
+        lastXCorrection = currentLine;
+        lastYCorrection = 0;
+      }
+
     }
 
     // Correct the theta value of the odometer
-    updateDirection();
-    double[] position = odometer.getXYT();
-    switch (direction) {
-      case NORTH:
-        odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
+    if (lineDetected)
+      correctOdometer(currentLine);
+
+    return true;
+  }
+
+  /**
+   * Rotates one motor until a line is detected on that side or the time limit is exceeded. If no
+   * line is seen going forward the method tried going backwards.
+   * 
+   * @param side Side to rotate. 0 for left, 1 for right.
+   * @return True if a line was ever detected, false otherwise.
+   */
+  public boolean rotateUntilDetection(int side) {
+    // Stop both motors
+    leftMotor.stop(true);
+    rightMotor.stop(false);
+    try {
+      Thread.sleep(200);
+    } catch (InterruptedException e2) {
+      e2.printStackTrace();
+    }
+    
+    // Adjust for the requested side of rotation
+    EV3LargeRegulatedMotor motor = side == 0 ? leftMotor : rightMotor;
+    int speed = side == 0 ? (int) (CORRECTION_SPEED * MOTOR_OFFSET) : CORRECTION_SPEED;
+
+    boolean inLine;
+    boolean goBack = false;
+
+    // Rotate forward until a line is detected of the time limit exceeded
+    long prevTacho = motor.getTachoCount();
+    long startTime = System.currentTimeMillis();
+    motor.setSpeed(speed);
+    motor.forward();
+
+    while (true) {
+      lightPoller.poll();
+      inLine = side == 0 ? lightPoller.leftInLine : lightPoller.rightInLine;
+      if (inLine) {
+        motor.stop(false);
         break;
-      case EAST:
-        odometer.setTheta(90);
-        odometer.setXYT((currentLine * TILE_SIZE) + SENSOR_OFFSET, position[1], 90);
+      } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+        goBack = true; // If the line is never seen signal the method to undo the turning
         break;
-      case SOUTH:
-        odometer.setTheta(180);
-        odometer.setXYT(position[0], (currentLine * TILE_SIZE) - SENSOR_OFFSET, 180);
+      }
+      try {
+        Thread.sleep(CORRECTION_PERIOD);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+    
+    try {
+      Thread.sleep(200);
+    } catch (InterruptedException e1) {
+      e1.printStackTrace();
+    }
+
+    // Undo the turning since a line was never seen
+    if (goBack) {
+      motor.setSpeed(speed);
+      int reverseRotation =
+          side == 0 ? (int) ((prevTacho - motor.getTachoCount()) * MOTOR_OFFSET)
+              : (int) (prevTacho - motor.getTachoCount());
+      motor.rotate(reverseRotation);
+      goBack = false;
+    }
+    // If a line was seen return
+    else
+      return true;
+
+    // If no line was seen try going backwards
+    prevTacho = motor.getTachoCount();
+    startTime = System.currentTimeMillis();
+
+    motor.setSpeed(speed);
+    motor.backward();
+
+    while (true) {
+      lightPoller.poll();
+      inLine = side == 0 ? lightPoller.leftInLine : lightPoller.rightInLine;
+      if (inLine) {
+        motor.stop(false);
         break;
-      case WEST:
-        odometer.setTheta(270);
-        odometer.setXYT((currentLine * TILE_SIZE) + SENSOR_OFFSET, position[1], 270);
+      } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+        goBack = true; // If the line is never seen signal the method to undo the turning
         break;
-      default:
+      }
+      try {
+        Thread.sleep(CORRECTION_PERIOD);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+    
+    try {
+      Thread.sleep(200);
+    } catch (InterruptedException e1) {
+      e1.printStackTrace();
+    }
+
+    // Undo the turning since a line was never seen
+    if (goBack) {
+      motor.setSpeed(speed);
+      int reverseRotation =
+          side == 0 ? (int) ((prevTacho - motor.getTachoCount()) * MOTOR_OFFSET)
+              : (int) (prevTacho - motor.getTachoCount());
+      motor.rotate(reverseRotation);
+      return false;
     }
 
     return true;
   }
 
   /**
-   * Update the direction variable according to the odometer's reading.
+   * Updates the internal direction variable according to the odometer's reading.
    */
-  private void updateDirection() {
+  public void updateDirection() {
     double theta = odometer.getXYT()[2];
     if (theta > 45 && theta < 135)
       direction = Direction.EAST;
@@ -296,7 +455,7 @@ public class OdometryCorrector {
     else
       direction = Direction.NORTH;
   }
-  
+
 
   /**
    * Enables trajectory and odometry correction using two light sensors.
@@ -321,8 +480,42 @@ public class OdometryCorrector {
     return correctionEnabled;
   }
 
+  /**
+   * Direction enum used to classify the angle heading of the robot into four groups.
+   * 
+   * @author angelortiz
+   *
+   */
   public enum Direction {
     INIT, NORTH, EAST, SOUTH, WEST;
+  }
+
+  /**
+   * Overwrites the odometer values based on the two light sensor correction results.
+   * 
+   * @param currentLine Estimated line that was used for the correction.
+   */
+  private void correctOdometer(int currentLine) {
+    updateDirection();
+    double[] position = odometer.getXYT();
+    switch (direction) {
+      case NORTH:
+        odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
+        break;
+      case EAST:
+        odometer.setTheta(90);
+        odometer.setXYT((currentLine * TILE_SIZE) + SENSOR_OFFSET, position[1], 90);
+        break;
+      case SOUTH:
+        odometer.setTheta(180);
+        odometer.setXYT(position[0], (currentLine * TILE_SIZE) - SENSOR_OFFSET, 180);
+        break;
+      case WEST:
+        odometer.setTheta(270);
+        odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
+        break;
+      default:
+    }
   }
 
 }

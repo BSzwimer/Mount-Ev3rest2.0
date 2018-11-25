@@ -1,10 +1,6 @@
 package ca.mcgill.ecse211.mountev3rest.navigation;
 
-import java.util.LinkedList;
-import ca.mcgill.ecse211.mountev3rest.sensor.LightPoller;
 import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
-import lejos.hardware.Button;
-import lejos.hardware.Sound;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 
 /**
@@ -14,8 +10,8 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
  * the required distance and angle to reach it from the odometer's readings. Additionally, the class
  * runs on its own thread to enable the caller to change direction at any point if an event occurs.
  * <p>
- * Additionally, the {@code Navigation} class can optionally provide trajectory correction while
- * traveling by polling odometer angle reading and recomputing the path of travel.
+ * Additionally, the {@code Navigation} class invokes the {@code OdometryCorrector} class while
+ * navigating to reduce the error introduced by the motors and other external factors.
  * 
  * @author angelortiz
  *
@@ -23,14 +19,14 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class Navigation implements Runnable {
 
   // Class constants
-  private static final int FORWARD_SPEED = 100;
+  private static final int FORWARD_SPEED = 150;
   private static final int ROTATE_SPEED = 80;
-  private static final int NAVIGATION_PERIOD = 30;
+  private static final int NAVIGATION_PERIOD = 50;
+  private static final int WAIT_PERIOD = 120;
   private static final double TILE_SIZE = 30.48;
-  private static final int MIN_TRAVEL_DISTANCE = 1;
+  private static final int MIN_TRAVEL_DISTANCE = 0;
   private static final int MIN_STATIC_INTERVAL = 400;
-  private final double MOTOR_OFFSET;
-  private final double SENSOR_OFFSET;
+  public final double MOTOR_OFFSET;
   public final double WHEEL_RADIUS;
   public final double TRACK;
 
@@ -41,7 +37,6 @@ public class Navigation implements Runnable {
 
   // Information about the robot and target
   private Odometer odometer;
-  private LightPoller lightPoller;
   private OdometryCorrector odometryCorrector;
   private double[] target;
   public double targetAngle;
@@ -55,25 +50,21 @@ public class Navigation implements Runnable {
    * 
    * @param leftMotor Left motor of the robot.
    * @param rightMotor Right motor of the robot.
-   * @param trajectoryCorrection Enables trajectory correction using two light sensors.
+   * @param odometryCorrector Object used by the class to reduce the error while navigating.
    * @param WHEEL_RADIUS Wheel radius of the robot't wheels measured in centimeters.
    * @param TRACK Measurement of the robot's track in centimeter.
-   * @param MOTOR_OFFSET Ration between the speeds of the left and right motors. Used to correct
-   *        error in navigation.
-   * @param SENSOR_OFFSET Vertical distance between the wheel base and the light sensors in
-   *        centimeters.
+   * @param MOTOR_OFFSET Ratio between the speeds of the left and right motors. This value allows
+   *        the system to compensate for differences in the motors' performances.
    * 
    * @throws OdometerException If the singleton {@code Odometer} class has not been instantiated.
    * @throws PollerException If the {@code LightPoller} has not been instantiated.
    */
   public Navigation(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
       OdometryCorrector odometryCorrector, final double WHEEL_RADIUS, final double TRACK,
-      final double MOTOR_OFFSET, final double SENSOR_OFFSET)
-      throws OdometerException, PollerException {
+      final double MOTOR_OFFSET) throws OdometerException, PollerException {
 
     // Get navigation related objects
     this.odometer = Odometer.getOdometer();
-    this.lightPoller = LightPoller.getLightPoller();
     this.odometryCorrector = odometryCorrector;
 
     // Set the motors
@@ -84,7 +75,6 @@ public class Navigation implements Runnable {
     this.WHEEL_RADIUS = WHEEL_RADIUS;
     this.TRACK = TRACK;
     this.MOTOR_OFFSET = MOTOR_OFFSET;
-    this.SENSOR_OFFSET = SENSOR_OFFSET;
 
     // Instantiate the target
     target = new double[2];
@@ -97,11 +87,13 @@ public class Navigation implements Runnable {
   }
 
 
-  // ---STATE MACHINE LOGIC---
+  /* ---STATE MACHINE LOGIC--- */
 
   /**
-   * Runs the state machine main logic. This involves setting the direction of the robot to a new
-   * target if required and optionally applying trajectory correction.
+   * Runs the state machine main logic.
+   * <p>
+   * This involves setting the direction of the robot to a new target if required and optionally
+   * applying trajectory correction.
    */
   @Override
   public void run() {
@@ -123,12 +115,14 @@ public class Navigation implements Runnable {
       // Set this flag to let other threads know that the robot is currently reaching a waypoint
       if (!leftMotor.isMoving() && !rightMotor.isMoving())
         isNavigating = false;
-      
+
       // Correct the trajectory if necessary
-      corrected = odometryCorrector.applyCorrection();
-      if (corrected) {
-        directionChanged = true;
-        isNavigating = true;
+      if (isNavigating && odometryCorrector.isEnabled()) {
+        corrected = odometryCorrector.applyCorrection();
+        if (corrected) {
+          directionChanged = true;
+          isNavigating = true;
+        }
       }
 
       // This ensures that the navigator only runs once every period
@@ -144,7 +138,7 @@ public class Navigation implements Runnable {
   }
 
 
-  // ---ROBOT DISPLACEMENT INTERFACE---
+  /* ---ROBOT DISPLACEMENT INTERFACE--- */
 
   /**
    * Sets current target and indicates the state machine to retrace the trajectory.
@@ -189,9 +183,9 @@ public class Navigation implements Runnable {
   }
 
   /**
-   * Turns to an absolute angle with respect to the grid ensuring minimal rotation. This method
-   * constantly polls the gyro sensor angle reading reading to ensure high accuracy. Positive angles
-   * are defined as counter-clockwise rotation and vice-versa.
+   * Turns to an absolute angle with respect to the grid ensuring minimal rotation. Positive angles
+   * are defined as counter-clockwise rotation and vice-versa. The accuracy of this method heavily
+   * relies on the accuracy of the track measurement provided during the instantiation of the class.
    * 
    * @param theta Desired angle of rotation.
    */
@@ -242,8 +236,7 @@ public class Navigation implements Runnable {
   }
 
   /**
-   * Makes the robot move forward a determined distance and waits until the distance has been
-   * traveled.
+   * Makes the robot move forward a determined distance in centimeters.
    * 
    * @param dist Distance to travel forward in centimeters.
    */
@@ -251,11 +244,12 @@ public class Navigation implements Runnable {
     leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, dist * MOTOR_OFFSET), true);
-    rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, dist), false);
+    rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, dist), true);
+    isNavigating = true;
   }
 
 
-  // ---NAVIGATION STATUS INTERFACE---
+  /* ---NAVIGATION STATUS INTERFACE--- */
 
   /**
    * Indicates whether the robot is still navigating.
@@ -266,17 +260,19 @@ public class Navigation implements Runnable {
     return isNavigating;
   }
 
+  /**
+   * This method does not return until the {@code Navigation} class reaches its current target.
+   */
   public void waitNavigation() {
     long time = System.currentTimeMillis();
     while (true) {
       if (isNavigating)
         time = System.currentTimeMillis();
-      else {
-        if (System.currentTimeMillis() - time > MIN_STATIC_INTERVAL)
-          break;
+      else if (System.currentTimeMillis() - time > MIN_STATIC_INTERVAL) {
+        break;
       }
       try {
-        Thread.sleep(NAVIGATION_PERIOD);
+        Thread.sleep(WAIT_PERIOD);
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
@@ -298,22 +294,6 @@ public class Navigation implements Runnable {
 
 
   // ---PRIVATE METHODS---
-
-  /**
-   * Moves the robot in the direction of the current target set in the state machine.
-   */
-  /*
-   * private void goToTarget() { // Compute the target's absolute angle and the distance required to
-   * reach it double[] position = odometer.getXYT(); double[] realTarget =
-   * computeRealTarget(position[0], position[1], target[0] * TILE_SIZE, target[1] * TILE_SIZE);
-   * 
-   * // Turn to target angle targetAngle = realTarget[1]; turnTo(realTarget[1]);
-   * 
-   * // Move forward the required target distance leftMotor.setSpeed((int) (FORWARD_SPEED *
-   * MOTOR_OFFSET)); rightMotor.setSpeed(FORWARD_SPEED); leftMotor.rotate((int)
-   * (convertDistance(WHEEL_RADIUS, realTarget[0]) * MOTOR_OFFSET), true);
-   * rightMotor.rotate(convertDistance(WHEEL_RADIUS, realTarget[0]), true); }
-   */
 
   /**
    * TODO

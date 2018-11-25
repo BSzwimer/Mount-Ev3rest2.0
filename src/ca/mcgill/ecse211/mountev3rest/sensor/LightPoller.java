@@ -7,11 +7,10 @@ import lejos.robotics.filter.MeanFilter;
 
 
 /**
- * Provides an interface for accessing the light readings of two light sensors while running on a
- * single thread.
+ * Provides an interface for accessing the light readings of three light sensors on request.
  * <p>
  * The class is implemented as a singleton to facilitate access to the sensors to different parts of
- * the code. Additionally, the {@code LightPoller} class also provides line detection for the line
+ * the code. Additionally, the {@code LightPoller} class also provides line detection for the left
  * and right sensors.
  * 
  * @author angelortiz
@@ -20,8 +19,9 @@ import lejos.robotics.filter.MeanFilter;
 public class LightPoller {
 
   // Constants
-  private static final double LINE_COLOR_VALUE = 0.30; // Minimum value required to treat a sensor
+  private static final double LINE_COLOR_VALUE = 0.29; // Minimum value required to treat a sensor
                                                        // reading as a line
+  private static final int MEAN_SIZE = 1;
 
   // Attributes
   // Singleton instance
@@ -36,15 +36,42 @@ public class LightPoller {
   private MeanFilter rightFilter;
 
   // Public attributes used to access the sensors' readings
+  
+  /**
+   * Front light sensor reading. Since this sensor is in {@code RGB} mode this is a three element array with
+   * the corresponding values.
+   */
   public float[] front;
+  /**
+   * Left light sensor reading. This is a one element sample containing a {@code Red} value only.
+   */
   public float[] left;
+  /**
+   * Right light sensor reading. This is a one element sample containing a {@code Red} value only.
+   */
   public float[] right;
+  /**
+   * Mean of the last three readings of the front light sensor.
+   */
   public float[] frontMean;
+  /**
+   * Mean of the last three readings of the left light sensor.
+   */
   public float[] leftMean;
+  /**
+   * Mean of the last three readings of the right light sensor.
+   */
   public float[] rightMean;
 
   // Public attributes to access line detection results for line and right sensors
+  
+  /**
+   * Indicates whether the left light sensor is currently seeing a line.
+   */
   public boolean leftInLine;
+  /**
+   * Indicates whether the right light sensor is currently seeing a line.
+   */
   public boolean rightInLine;
 
   /**
@@ -60,19 +87,19 @@ public class LightPoller {
       EV3ColorSensor rightSensor) {
     // Initialize front sensor values
     frontProvider = frontSensor.getMode("RGB");
-    frontFilter = new MeanFilter(frontProvider, 4);
+    frontFilter = new MeanFilter(frontProvider, MEAN_SIZE);
     front = new float[frontProvider.sampleSize()];
     frontMean = new float[frontFilter.sampleSize()];
 
     // Initialize left sensor values
     leftProvider = leftSensor.getMode("Red");
-    leftFilter = new MeanFilter(leftProvider, 3);
+    leftFilter = new MeanFilter(leftProvider, MEAN_SIZE);
     left = new float[leftProvider.sampleSize()];
     leftMean = new float[leftFilter.sampleSize()];
 
     // Initialize right sensor values
     rightProvider = rightSensor.getMode("Red");
-    rightFilter = new MeanFilter(rightProvider, 3);
+    rightFilter = new MeanFilter(rightProvider, MEAN_SIZE);
     right = new float[rightProvider.sampleSize()];
     rightMean = new float[rightFilter.sampleSize()];
   }
@@ -139,6 +166,7 @@ public class LightPoller {
    */
   private void lineDetection() {
     if (leftMean[0] < LINE_COLOR_VALUE) {
+      if (!leftInLine)
       leftInLine = true;
     } else {
       leftInLine = false;

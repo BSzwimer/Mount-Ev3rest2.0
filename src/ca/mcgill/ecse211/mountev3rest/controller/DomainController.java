@@ -13,6 +13,7 @@ import ca.mcgill.ecse211.mountev3rest.sensor.UltrasonicPoller;
 import ca.mcgill.ecse211.mountev3rest.util.ArmController;
 import ca.mcgill.ecse211.mountev3rest.util.CoordinateMap;
 import lejos.hardware.Button;
+import lejos.hardware.Sound;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
@@ -32,8 +33,8 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
  * <p>
  * It is assumed that the caller of the {@code DomainController} methods (usually the
  * {@code MetaController}) will conform to the external requirements of each subtask. For instance,
- * a call to {@code crossTunnel(3, 3, 4, 6)} will not produce the expected outcome if the odometer
- * of the robot has not been set to the right initial values through the {@code localize()} method.
+ * a call to {@code crossTunnel()} will not produce the expected outcome if the odometer of the
+ * robot has not been set to the right initial values through the {@code localize()} method.
  * 
  * @see MetaController
  * 
@@ -43,11 +44,11 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 public class DomainController {
 
   // Constants
-  private static final double TRACK = 8.8;
+  private static final double TRACK = 8.50;
   private static final double WHEEL_RADIUS = 2.05;
   private static final double TILE_SIZE = 30.48;
-  private static final double MOTOR_OFFSET = 1.015;
-  private static final double SENSOR_OFFSET = 14.6;
+  private static final double MOTOR_OFFSET = 1.02;
+  private static final double SENSOR_OFFSET = -2.3;
 
   // Attributes
   CoordinateMap map;
@@ -72,7 +73,8 @@ public class DomainController {
    * for the instantiation of other classes.
    * 
    * @throws OdometerException If there is a problem while creating the Odometer singleton instance.
-   * @throws PollerException If the UltrasonicPoller or LightPoller have not been instantiated.
+   * @throws PollerException If there is a problem while instantiating the UltrasonicPoller an
+   *         LightPoller objects.
    * 
    * @see Odometer
    * @see LightPoller
@@ -97,12 +99,13 @@ public class DomainController {
     usPoller = UltrasonicPoller.getUltrasonicPoller(usSensor);
     lightPoller = LightPoller.getLightPoller(topLightSensor, leftLightSensor, rightLightSensor);
     odometer = Odometer.getOdometer(leftMotor, rightMotor, TRACK, WHEEL_RADIUS, MOTOR_OFFSET);
-    odometryCorrector = new OdometryCorrector(leftMotor, rightMotor, TILE_SIZE, SENSOR_OFFSET, MOTOR_OFFSET);
-    navigation = new Navigation(leftMotor, rightMotor, odometryCorrector, WHEEL_RADIUS, TRACK,
-        MOTOR_OFFSET, SENSOR_OFFSET);
+    odometryCorrector =
+        new OdometryCorrector(leftMotor, rightMotor, TILE_SIZE, SENSOR_OFFSET, MOTOR_OFFSET);
+    navigation =
+        new Navigation(leftMotor, rightMotor, odometryCorrector, WHEEL_RADIUS, TRACK, MOTOR_OFFSET);
     localizer = new Localizer(leftMotor, rightMotor, navigation, odometryCorrector, SENSOR_OFFSET,
         TILE_SIZE);
-    colorDetector = new ColorDetector(LocalEV3.get().getTextLCD(), lightPoller);
+    colorDetector = new ColorDetector(LocalEV3.get().getTextLCD());
     armController = new ArmController(colorSensorMotor, armMotor, leftMotor, rightMotor, navigation,
         colorDetector);
 
@@ -111,6 +114,10 @@ public class DomainController {
     navThread = new Thread(navigation);
     odoThread.start();
     navThread.start();
+
+
+    // REMOVE
+    odometer.setXYT(TILE_SIZE * 1, TILE_SIZE * 1, 0);
   }
 
   /**
@@ -133,9 +140,11 @@ public class DomainController {
   }
 
   /**
-   * Crosses the tunnel specified by the given coordinates. The method makes sure that the robot
+   * Crosses the tunnel specified by the map given coordinates. The method makes sure that the robot
    * reaches the closest entrance of the tunnel, then it moves through it until the robot is
    * completely outside on the other side.
+   * 
+   * @see CoordinateMap
    */
   public void crossTunnel() {
     double LL_dist = navigation.computeDistance(map.TN_LL_x, map.TN_LL_y);
@@ -147,10 +156,13 @@ public class DomainController {
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
         navigation.travelToX(map.TN_LL_x - 1);
         navigation.waitNavigation();
+        Button.waitForAnyPress();
         navigation.travelToY(map.TN_LL_y + 0.5);
         navigation.waitNavigation();
-        navigation.travelToX(map.TN_LL_x - 0.5);
+        Button.waitForAnyPress();
+        navigation.travelToX(map.TN_LL_x - 0.3);
         navigation.waitNavigation();
+        Button.waitForAnyPress();
         odometryCorrector.disable();
         navigation.travelToX(map.TN_UR_x + 1);
         navigation.waitNavigation();
@@ -159,7 +171,7 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToY(map.TN_UR_y - 0.5);
         navigation.waitNavigation();
-        navigation.travelToX(map.TN_UR_x + 0.5);
+        navigation.travelToX(map.TN_UR_x + 0.3);
         navigation.waitNavigation();
         odometryCorrector.disable();
         navigation.travelToX(map.TN_LL_x - 1);
@@ -167,9 +179,9 @@ public class DomainController {
       }
     } else { // Bridge is placed vertically.
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
-        navigation.travelToY(map.TN_LL_y - 1);
+        navigation.travelToY(map.TN_LL_y - 2);
         navigation.waitNavigation();
-        navigation.travelToX(map.TN_LL_x - 0.5);
+        navigation.travelToX(map.TN_LL_x + 0.5);
         navigation.waitNavigation();
         navigation.travelToY(map.TN_LL_y - 0.5);
         navigation.waitNavigation();
@@ -181,7 +193,7 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToX(map.TN_UR_x - 0.5);
         navigation.waitNavigation();
-        navigation.travelToY(map.TN_UR_y + 0.5);
+        navigation.travelToY(map.TN_UR_y + 0.3);
         navigation.waitNavigation();
         odometryCorrector.disable();
         navigation.travelToY(map.TN_LL_y - 1);
@@ -189,15 +201,15 @@ public class DomainController {
       }
     }
 
-    localizer.tunnelLocalization();
+    // localizer.tunnelLocalization();
 
     if (wasEnabled)
       odometryCorrector.enable();
   }
 
   /**
-   * Approaches the tree containing the ring set and positions the robot looking into the nearest
-   * face.
+   * Approaches the robot to the tree containing the ring set and positions it looking into the
+   * nearest face.
    */
   public void approachTree() {
     navigation.travelToY(map.T_y);
@@ -220,21 +232,56 @@ public class DomainController {
    * {@code approachTree()}.
    */
   public void goToNextFace() {
-    navigation.turnTo(odometer.getXYT()[2] + 90);
-    navigation.advanceDist(TILE_SIZE);
+    odometryCorrector.updateDirection();
 
-    navigation.turnTo(odometer.getXYT()[2] - 90);
-    navigation.advanceDist(TILE_SIZE);
+    switch (odometryCorrector.direction) {
+      case NORTH:
+        navigation.travelToX(map.T_x + 1);
+        navigation.waitNavigation();
 
-    navigation.turnTo(odometer.getXYT()[2] - 90);
+        navigation.travelToY(map.T_y);
+        navigation.waitNavigation();
+
+        navigation.turnTo(270);
+        break;
+      case EAST:
+        navigation.travelToY(map.T_y - 1);
+        navigation.waitNavigation();
+
+        navigation.travelToX(map.T_x);
+        navigation.waitNavigation();
+
+        navigation.turnTo(0);
+        break;
+      case SOUTH:
+        navigation.travelToX(map.T_x - 1);
+        navigation.waitNavigation();
+
+        navigation.travelToY(map.T_y);
+        navigation.waitNavigation();
+
+        navigation.turnTo(90);
+        break;
+      case WEST:
+        navigation.travelToY(map.T_y + 1);
+        navigation.waitNavigation();
+
+        navigation.travelToX(map.T_x);
+        navigation.waitNavigation();
+
+        navigation.turnTo(180);
+        break;
+      default:
+        break;
+    }
   }
 
   /**
    * Approaches the tree slowly, detects the color of a ring if any and attempts to get it. This
    * method assumes that the robot is already looking into a face of the tree and positioned on the
    * intersection right in front of it. If a color is detected a sequence of beeps matching the
-   * color encoding of the {@code ColorDetector} is issued. After the routine is over the robot goes
-   * back to the initial intersection where is was located before the method call.
+   * color encoding of the {@code ColorDetector} is issued. Once the collection is completed the
+   * robot goes back to the initial intersection where is was located before the method call.
    * 
    * @see ColorDetector
    * @see ArmController
@@ -251,40 +298,57 @@ public class DomainController {
 
   // REMOVE
   public void testNavigation() throws OdometerException {
-    
+
     TextLCD lcd = LocalEV3.get().getTextLCD();
     lcd.drawString("      READY      ", 0, 4);
-    
-    //Button.waitForAnyPress();
-    
+
+    // Button.waitForAnyPress();
+
     Display display = new Display(lcd);
     Thread disThread = new Thread(display);
     disThread.start();
-    
+
     try {
       Thread.sleep(1000);
     } catch (InterruptedException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();
     }
-    
-    odometer.setXYT(TILE_SIZE, TILE_SIZE, 0);
-    navigation.travelToY(6);
+
+    //odometryCorrector.disable();
+
+    odometer.setXYT(TILE_SIZE * 1, TILE_SIZE * 1, 0);
+    navigation.travelToY(5);
     navigation.waitNavigation();
+    navigation.travelToX(6);
+    navigation.waitNavigation();
+    
+    /*navigation.turnTo(90);
     Button.waitForAnyPress();
-    navigation.travelToX(3);
-    navigation.waitNavigation();
-    
+    navigation.turnTo(180);
+    Button.waitForAnyPress();
+    navigation.turnTo(90);
+    Button.waitForAnyPress();
+    navigation.turnTo(0);
+    Button.waitForAnyPress();*/
+
     lcd.clear();
     lcd.drawString("       DONE       ", 0, 4);
-    
+
     Button.waitForAnyPress();
   }
 
-
-  public void testColorDetection(TextLCD lcd) {
-    ColorDetector cd = new ColorDetector(lcd, lightPoller);
-    cd.demoDetection();
+  // REMOVE
+  public void testColorDetection() {
+    TextLCD lcd = LocalEV3.get().getTextLCD();
+    ColorDetector cd = null;
+    try {
+      cd = new ColorDetector(lcd);
+    } catch (PollerException e) {
+      e.printStackTrace();
+    }
+    //cd.demoDetection();
+    cd.printRed();
   }
 
 }

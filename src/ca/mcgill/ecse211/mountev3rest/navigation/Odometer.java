@@ -3,8 +3,8 @@ package ca.mcgill.ecse211.mountev3rest.navigation;
 import lejos.hardware.motor.EV3LargeRegulatedMotor;
 
 /**
- * Uses the measurements of the wheel radius, tacho meter readings and gyro sensor angle readings to
- * provide a real time estimation of the cart in a 2 dimensional plane.
+ * Uses the measurements of the wheel radius and tacho meter readings to provide a real time
+ * estimation of the cart in a 2 dimensional plane.
  * 
  * @author angelortiz
  *
@@ -30,17 +30,17 @@ public class Odometer extends OdometerData implements Runnable {
   private EV3LargeRegulatedMotor rightMotor;
 
   /**
-   * This is the default constructor of this class. It initiates all motors and variables once.It
+   * This is the default constructor of this class. It initiates all motors and variables once. It
    * cannot be accessed externally.
    * 
-   * @param leftMotor
-   * @param rightMotor
-   * @param gyroSensor
-   * @param TRACK
-   * @param WHEEL_RAD
-   * @param MOTOR_OFFSET
+   * @param leftMotor Left motor of the robot.
+   * @param rightMotor Right motor of the robot.
+   * @param TRACK Distance between the left and right wheels.
+   * @param WHEEL_RADIUS Wheel radius measurement of the robot.
+   * @param MOTOR_OFFSET Ratio between the speed of the left and right motors.
    * 
-   * @throws OdometerException
+   * @throws OdometerException If there is a problem while instantiating the new {@code Odometer}
+   *         object.
    */
   private Odometer(EV3LargeRegulatedMotor leftMotor, EV3LargeRegulatedMotor rightMotor,
       final double TRACK, final double WHEEL_RAD, final double MOTOR_OFFSET)
@@ -102,9 +102,8 @@ public class Odometer extends OdometerData implements Runnable {
   }
 
   /**
-   * Uses the wheel radius measurement, tacho meter measurements from the motors and gyro sensor
-   * angle readings to update the X and Y values as well the angle Theta of the cart's current
-   * position.
+   * Uses the wheel radius measurement and tacho meter measurements from the motors to update the X
+   * and Y values as well the angle Theta of the cart's current position.
    */
   @Override
   public void run() {

@@ -7,13 +7,11 @@ import ca.mcgill.ecse211.WiFiClient.WifiConnection;
 import ca.mcgill.ecse211.mountev3rest.navigation.Display;
 import ca.mcgill.ecse211.mountev3rest.navigation.OdometerException;
 import ca.mcgill.ecse211.mountev3rest.sensor.PollerException;
-import ca.mcgill.ecse211.mountev3rest.util.ArmController;
 import ca.mcgill.ecse211.mountev3rest.util.CoordinateMap;
 import lejos.hardware.Button;
 import lejos.hardware.Sound;
 import lejos.hardware.ev3.LocalEV3;
 import lejos.hardware.lcd.TextLCD;
-import lejos.hardware.motor.EV3LargeRegulatedMotor;
 
 /**
  * Performs all the high level tasks required to complete the overall routine.
@@ -29,7 +27,7 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
  * met before requesting that a given subtask is performed. These external conditions are defined by
  * the executor of the subtask (usually the {@code DomainController}).
  * 
- * @see MetaController
+ * @see DomainController
  * 
  * @author angelortiz
  *
@@ -37,9 +35,10 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class MetaController {
 
   // Constants
-  private static final String SERVER_IP = "192.168.2.2";
+  private static final String SERVER_IP = "192.168.2.6";
   private static final int TEAM_NUMBER = 11;
   private static final boolean ENABLE_DEBUG_WIFI_PRINT = false;
+  private static final int RINGS_TO_COLLECT = 4;
 
   // Attributes
   private DomainController domainController;
@@ -48,15 +47,16 @@ public class MetaController {
   public static void main(String[] args) throws OdometerException, PollerException {
     // Instantiate the meta controller
     MetaController metaController = new MetaController();
-    
+
     // Get Wi-Fi Data and pass it to the domain controller.
-    //CoordinateMap map = getWiFiData();
-    //metaController.domainController.setMap(map);
-    
+    CoordinateMap map = getWiFiData();
+    metaController.domainController.setMap(map);
+
     // Run the whole ring routine.
-    //metaController.run();
-    metaController.testRun();
-    
+    metaController.run();
+    //metaController.testRun();
+
+    Button.waitForAnyPress();
     System.exit(0);
   }
 
@@ -71,8 +71,9 @@ public class MetaController {
   }
 
   /**
-   * Performs all the required subtasks involved in the ring collection routine. The method runs on
-   * an infinite loop that exits when all the rings have been collected.
+   * Performs all the required subtasks involved in the ring collection routine. This includes
+   * everything from localization, tunnel traversal, and ring collection. The method returns once
+   * the entire routine has been performed.
    * 
    * @throws OdometerException If the {@code Odometer} class has not yet been instantiated.
    *
@@ -81,10 +82,7 @@ public class MetaController {
     TextLCD lcd = LocalEV3.get().getTextLCD();
 
     lcd.clear();
-    lcd.drawString("Press any button", 0, 3);
-    lcd.drawString("    to start.   ", 0, 4);
-
-    Button.waitForAnyPress();
+    lcd.drawString("       READY       ", 0, 4);
 
     Display display = new Display(lcd);
     Thread disThread = new Thread(display);
@@ -93,15 +91,22 @@ public class MetaController {
     // -- START RING SEARCH ROUTINE --
 
     // Localize and beep three times
-    domainController.localize();
+    
+    domainController.localize(); 
+    Sound.beep(); 
+    Sound.beep(); 
     Sound.beep();
-    Sound.beep();
-    Sound.beep();
+    
 
     domainController.crossTunnel();
     domainController.approachTree();
     domainController.grabRings();
+    for(int i = 0; i < RINGS_TO_COLLECT - 1; i++) {
+      domainController.goToNextFace();
+      domainController.grabRings();
+    }
     // domainController.crossTunnel();
+    // domainController.releaseRings();
   }
 
   /**
@@ -124,10 +129,11 @@ public class MetaController {
 
     return new CoordinateMap(data, TEAM_NUMBER);
   }
-  
+
   // REMOVE
   public void testRun() throws OdometerException {
-    domainController.testNavigation();
+    //domainController.testNavigation();
+    domainController.testColorDetection();
   }
 
 }

@@ -1,5 +1,6 @@
 package ca.mcgill.ecse211.mountev3rest.sensor;
 
+import lejos.hardware.Sound;
 import lejos.hardware.lcd.TextLCD;
 
 /**
@@ -45,12 +46,15 @@ public class ColorDetector {
    * 
    * @param lcd         {@code TextLCD} representing the display of the robot.
    * @param lightPoller {@code LightPoller} object containing the light sensors of the robot.
+   * 
+   * @throws PollerException If the light poller has not been instantiated.
+   * 
    * @see   LightPoller 
    * @see   TextLCD
    */
-  public ColorDetector(TextLCD lcd, LightPoller lightPoller) {
+  public ColorDetector(TextLCD lcd) throws PollerException {
     this.lcd = lcd;
-    this.lightPoller = lightPoller;
+    this.lightPoller = LightPoller.getLightPoller();
   }
 
   /**
@@ -67,6 +71,8 @@ public class ColorDetector {
 
     while (true) {
       correctionStart = System.currentTimeMillis();
+      
+      lightPoller.poll();
 
       // Compute the distances of the readings with respect to the reference means
       boolean blue = computeDistance(BLUE_MEANS, lightPoller.front) < 0.15;
@@ -166,13 +172,16 @@ public class ColorDetector {
    */
   public void printRed() {
     long correctionStart, correctionEnd;
+    
+    lightPoller.poll();
 
     while (true) {
       correctionStart = System.currentTimeMillis();
 
       double L = lightPoller.leftMean[0];
+      double R = lightPoller.rightMean[0];
 
-      System.out.println(L);
+      System.out.println(String.format("L: %f | R: %f", L, R));
 
       correctionEnd = System.currentTimeMillis();
       if (correctionEnd - correctionStart < COLOR_DETECTION_PERIOD) {
@@ -181,6 +190,7 @@ public class ColorDetector {
         } catch (InterruptedException e) {
         }
       }
+      lightPoller.poll();
     }
   }
 

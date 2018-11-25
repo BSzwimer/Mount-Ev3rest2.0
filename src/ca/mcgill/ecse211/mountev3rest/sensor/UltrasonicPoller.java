@@ -18,6 +18,8 @@ public class UltrasonicPoller {
   // Attributes
   // Singleton instance
   private static UltrasonicPoller usPoller = null;
+  private int filter;
+  private static final int FILTER_MIN = 20;
 
   private SampleProvider sp;
   private MeanFilter mf;
@@ -77,7 +79,19 @@ public class UltrasonicPoller {
    */
   public int poll() {
     sp.fetchSample(buffer, 0);
-    return (int) (buffer[0] * 100);
+    int distance = (int) (buffer[0] * 100);
+    
+    while(distance > 255 && filter <= FILTER_MIN) {
+      sp.fetchSample(buffer, 0);
+      distance = (int) (buffer[0] * 100);
+    
+      if (distance > 255)
+        filter++;
+      else
+        filter = 0;
+    }
+    
+    return distance > 255? 255 : distance;
   }
 
   /**
