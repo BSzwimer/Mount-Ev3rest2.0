@@ -18,7 +18,7 @@ import lejos.hardware.motor.EV3MediumRegulatedMotor;
 public class ArmController {
 
   // Constants
-  private static final int DISTANCE_TO_TREE = 14;
+  private static final double DISTANCE_TO_TREE = 16.5;
   private static final int COLOR_DETECTION_PERIOD = 15;
   private static final int FORWARD_SPEED = 100;
   private static final int OPEN_ANGLE = 80;
@@ -82,16 +82,14 @@ public class ArmController {
     colorSensorMotor.setSpeed(10);
     int colorDetected = 5; // 5 means no detection
     int startTacho = colorSensorMotor.getTachoCount();
-    int endTacho = 0;
     
-    colorSensorMotor.rotate(70, true);
+    colorSensorMotor.rotate(80, true);
     
     // Check for color until the motor finished the sweep
     while(colorSensorMotor.isMoving()) {
       // Keep checking for color if no one has been detected
       colorDetected = colorDetector.getColor();
       if (colorDetected != 5) {
-        endTacho = colorSensorMotor.getTachoCount();
         colorSensorMotor.stop(true);
         break;
       }
@@ -111,7 +109,7 @@ public class ArmController {
     
     // Reverse the rotation of the motor location
     colorSensorMotor.setSpeed(70);
-    colorSensorMotor.rotate(startTacho - endTacho, false);
+    colorSensorMotor.rotate(startTacho - colorSensorMotor.getTachoCount(), false);
 
     // Close the claw again
     armMotor.setSpeed(50);
@@ -131,7 +129,7 @@ public class ArmController {
   public void releaseRing() {
 
     // speed needs to be tested
-    armMotor.setSpeed(75);
+    armMotor.setSpeed(100);
     armMotor.rotate(360, false);
 
   }

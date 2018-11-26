@@ -49,6 +49,7 @@ public class DomainController {
   private static final double TILE_SIZE = 30.48;
   private static final double MOTOR_OFFSET = 1.02;
   private static final double SENSOR_OFFSET = -2.3;
+  private static final int MIN_DIST_TO_TREE = 5;
 
   // Attributes
   CoordinateMap map;
@@ -156,14 +157,12 @@ public class DomainController {
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
         navigation.travelToX(map.TN_LL_x - 1);
         navigation.waitNavigation();
-        Button.waitForAnyPress();
         navigation.travelToY(map.TN_LL_y + 0.5);
         navigation.waitNavigation();
-        Button.waitForAnyPress();
-        navigation.travelToX(map.TN_LL_x - 0.3);
+        navigation.travelToX(map.TN_LL_x - 0.8);
         navigation.waitNavigation();
-        Button.waitForAnyPress();
         odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
         navigation.travelToX(map.TN_UR_x + 1);
         navigation.waitNavigation();
       } else { // Robot is closer to the upper right corner.
@@ -171,21 +170,23 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToY(map.TN_UR_y - 0.5);
         navigation.waitNavigation();
-        navigation.travelToX(map.TN_UR_x + 0.3);
+        navigation.travelToX(map.TN_UR_x + 0.8);
         navigation.waitNavigation();
         odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
         navigation.travelToX(map.TN_LL_x - 1);
         navigation.waitNavigation();
       }
     } else { // Bridge is placed vertically.
       if (LL_dist < UR_dist) { // Robot is closer to the lower left corner.
-        navigation.travelToY(map.TN_LL_y - 2);
+        navigation.travelToY(map.TN_LL_y - 1);
         navigation.waitNavigation();
         navigation.travelToX(map.TN_LL_x + 0.5);
         navigation.waitNavigation();
-        navigation.travelToY(map.TN_LL_y - 0.5);
+        navigation.travelToY(map.TN_LL_y - 0.8);
         navigation.waitNavigation();
         odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
         navigation.travelToY(map.TN_UR_y + 1);
         navigation.waitNavigation();
       } else { // Robot is closer to the upper right corner.
@@ -193,9 +194,10 @@ public class DomainController {
         navigation.waitNavigation();
         navigation.travelToX(map.TN_UR_x - 0.5);
         navigation.waitNavigation();
-        navigation.travelToY(map.TN_UR_y + 0.3);
+        navigation.travelToY(map.TN_UR_y + 0.8);
         navigation.waitNavigation();
         odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
         navigation.travelToY(map.TN_LL_y - 1);
         navigation.waitNavigation();
       }
@@ -212,18 +214,53 @@ public class DomainController {
    * nearest face.
    */
   public void approachTree() {
-    navigation.travelToY(map.T_y);
-    navigation.waitNavigation();
-
+    boolean inY = false;
+    boolean inX = false;
+    
     double[] position = odometer.getXYT();
+    if (Math.abs(position[1] - TILE_SIZE * (map.T_y)) < MIN_DIST_TO_TREE) {
+      inY = true;
+    } else if (Math.abs(position[1] - TILE_SIZE * (map.T_y - 1)) < Math
+        .abs(position[1] - TILE_SIZE * (map.T_y + 1))) {
+      navigation.travelToY(map.T_y - 1);
+      navigation.waitNavigation();
+    } else {
+      navigation.travelToY(map.T_y + 1);
+      navigation.waitNavigation();
+    }
 
-    if (Math.abs(position[0] - TILE_SIZE * (map.T_x - 1)) < Math
-        .abs(position[1] - TILE_SIZE * (map.T_x + 1))) {
+    position = odometer.getXYT();
+    if (Math.abs(position[0] - TILE_SIZE * (map.T_x)) < MIN_DIST_TO_TREE) {
+      inX = true;
+    } else if (Math.abs(position[0] - TILE_SIZE * (map.T_x - 1)) < Math
+        .abs(position[0] - TILE_SIZE * (map.T_x + 1))) {
       navigation.travelToX(map.T_x - 1);
+      navigation.waitNavigation();
     } else {
       navigation.travelToX(map.T_x + 1);
+      navigation.waitNavigation();
     }
-    navigation.waitNavigation();
+    
+    if (!inX && !inY) {
+      navigation.travelToY(map.T_y);
+      navigation.waitNavigation();
+      inY = true;
+    }
+    
+    position = odometer.getXYT();
+    if (inY) {
+      if (position[0] < TILE_SIZE * map.T_x) {
+        navigation.turnTo(90);
+      } else {
+        navigation.turnTo(270);
+      }
+    } else if (inX) {
+      if (position[1] < TILE_SIZE * map.T_y) {
+        navigation.turnTo(0);
+      } else {
+        navigation.turnTo(180);
+      }
+    }
   }
 
   /**
@@ -286,12 +323,46 @@ public class DomainController {
    * @see ColorDetector
    * @see ArmController
    */
-  public void grabRings() {
+  public void grabRings() {  
     boolean wasEnabled = odometryCorrector.isEnabled();
-
     odometryCorrector.disable();
+    
+    navigation.advanceDist(5);
+    navigation.waitNavigation();
+    
+    odometryCorrector.correctOnNextLine(true);
+    
     armController.getRing();
 
+    if (wasEnabled)
+      odometryCorrector.enable();
+  }
+  
+  /**
+   * TODO
+   */
+  public void releaseRings() {
+    boolean wasEnabled = odometryCorrector.isEnabled();
+    odometryCorrector.disable();
+    
+    switch((int)map.StartCorner) {
+      case 0:
+        navigation.travelTo(map.LL_x + 1, map.LL_y + 1);
+        break;
+      case 1:
+        navigation.travelTo(map.UR_x - 1, map.LL_y + 1);
+        break;
+      case 2:
+        navigation.travelTo(map.UR_x - 1, map.UR_y - 1);
+        break;
+      case 3:
+        navigation.travelTo(map.LL_x + 1, map.UR_y - 1);
+        break;
+    }
+    navigation.waitNavigation();
+    
+    armController.releaseRing();
+    
     if (wasEnabled)
       odometryCorrector.enable();
   }

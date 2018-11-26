@@ -24,7 +24,7 @@ public class Navigation implements Runnable {
   private static final int NAVIGATION_PERIOD = 50;
   private static final int WAIT_PERIOD = 120;
   private static final double TILE_SIZE = 30.48;
-  private static final int MIN_TRAVEL_DISTANCE = 0;
+  private static final double MIN_TRAVEL_DISTANCE = 0.5;
   private static final int MIN_STATIC_INTERVAL = 400;
   public final double MOTOR_OFFSET;
   public final double WHEEL_RADIUS;

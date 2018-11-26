@@ -20,8 +20,10 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class OdometryCorrector {
 
   // Constants
-  private static final int CORRECTION_TIME_LIMIT = 2700;
-  private static final int FORWARD_SPEED = 80;
+  private static final int CORRECTION_TIME_LIMIT = 2200;
+  private static final int SHORT_CORRECTION_TIME_LIMIT = 1400;
+  private static final int ISOLATED_CORRECTION_LIMIT = 7000;
+  private static final int FORWARD_SPEED = 120;
   private static final int CORRECTION_SPEED = 60;
   private static final int ROTATE_SPEED = 80;
   private static final int CORRECTION_PERIOD = 50;
@@ -173,6 +175,66 @@ public class OdometryCorrector {
   }
 
   /**
+   * TODO
+   * 
+   * @param goBackwards
+   */
+  public void correctOnNextLine(boolean goBackwards) {    
+    int prevTachoLeft = leftMotor.getTachoCount();
+    int prevTachoRight = rightMotor.getTachoCount();
+    long startTime = System.currentTimeMillis();
+    boolean goBack = false;
+    
+    leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+    rightMotor.setSpeed(FORWARD_SPEED);
+    if (goBackwards) {
+      leftMotor.backward();
+      rightMotor.backward();
+    } else {
+      leftMotor.forward();
+      rightMotor.forward();
+    }
+    
+    while (true) {
+      lightPoller.poll();
+      if (lightPoller.leftInLine) {
+        adjustTrajectory(1, goBackwards, false);
+        break;
+      } else if (lightPoller.rightInLine) {
+        adjustTrajectory(0, goBackwards, false);
+        break;
+      } else if (System.currentTimeMillis() - startTime > ISOLATED_CORRECTION_LIMIT) {
+        goBack = true;
+        break;
+      }
+      
+      try {
+        Thread.sleep(CORRECTION_PERIOD);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+    
+    if (goBack) {
+      leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+      rightMotor.setSpeed(FORWARD_SPEED);
+      leftMotor.rotate(prevTachoLeft - leftMotor.getTachoCount(), true);
+      rightMotor.rotate(prevTachoRight - rightMotor.getTachoCount(), false);
+    }
+    
+  }
+
+  /**
+   * TODO
+   * 
+   * @param laggingSide
+   * @return
+   */
+  public boolean adjustTrajectory(int laggingSide) {
+    return adjustTrajectory(laggingSide, false, true);
+  }
+
+  /**
    * Adjusts the trajectory of the robot by stopping the leading side and waiting until the lagging
    * side sees a line. In case the lagging side takes too long to see a line, the rotation caused by
    * stopping one of the wheels is reversed and the method returns.
@@ -184,7 +246,8 @@ public class OdometryCorrector {
    * 
    * @return True if a correction was actually applied to the odometer, false otherwise.
    */
-  public boolean adjustTrajectory(int laggingSide) {
+  public boolean adjustTrajectory(int laggingSide, boolean goingBackwards,
+      boolean checkForRepeats) {
     // Check that this line is no the same as the one for the past correction.
     int lastCorrection = -1;
     if (direction == Direction.NORTH || direction == Direction.SOUTH)
@@ -201,10 +264,10 @@ public class OdometryCorrector {
      */
 
     // If the last correction was on this line do nothing
-    if (lastCorrection == currentLine) {
+    if (lastCorrection == currentLine && checkForRepeats) {
       return false;
     }
-    
+
     Sound.beep();
 
     boolean lineDetected = false;
@@ -216,7 +279,7 @@ public class OdometryCorrector {
     // Lagging side is left
     if (laggingSide == 0) {
       lightPoller.poll();
-      
+
       int prevTachoLeft = leftMotor.getTachoCount();
       int prevTachoRight = rightMotor.getTachoCount();
       long startTime = System.currentTimeMillis();
@@ -227,30 +290,36 @@ public class OdometryCorrector {
         lightPoller.poll();
         leftMotor.setSpeed((int) (CORRECTION_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(CORRECTION_SPEED);
-        leftMotor.backward();
-        rightMotor.backward();
-        
+
+        if (goingBackwards) {
+          leftMotor.forward();
+          rightMotor.forward();
+        } else {
+          leftMotor.backward();
+          rightMotor.backward();
+        }
+
         if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
           goBack = true; // If the line is never seen signal the method to undo the turning
           break;
         }
-        
+
         try {
           Thread.sleep(CORRECTION_PERIOD);
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
       }
-      
+
       // Undo the previous travel
       if (goBack) {
         leftMotor.rotate(prevTachoLeft - leftMotor.getTachoCount());
         rightMotor.rotate(prevTachoRight - rightMotor.getTachoCount());
       }
-      
+
       rightMotor.stop(true);
       leftMotor.stop(false);
-      
+
       try {
         Thread.sleep(200);
       } catch (InterruptedException e1) {
@@ -258,7 +327,7 @@ public class OdometryCorrector {
       }
 
       // Correct the lagging wheel
-      lineDetected = rotateUntilDetection(0);
+      lineDetected = rotateUntilDetection(0, SHORT_CORRECTION_TIME_LIMIT, goingBackwards);
 
       if (direction == Direction.NORTH || direction == Direction.SOUTH) {
         lastYCorrection = currentLine;
@@ -271,7 +340,7 @@ public class OdometryCorrector {
       // Lagging side is right
     } else if (laggingSide == 1) {
       lightPoller.poll();
-      
+
       int prevTachoLeft = leftMotor.getTachoCount();
       int prevTachoRight = rightMotor.getTachoCount();
       long startTime = System.currentTimeMillis();
@@ -282,30 +351,36 @@ public class OdometryCorrector {
         lightPoller.poll();
         leftMotor.setSpeed((int) (CORRECTION_SPEED * MOTOR_OFFSET));
         rightMotor.setSpeed(CORRECTION_SPEED);
-        leftMotor.backward();
-        rightMotor.backward();
-        
+
+        if (goingBackwards) {
+          leftMotor.forward();
+          rightMotor.forward();
+        } else {
+          leftMotor.backward();
+          rightMotor.backward();
+        }
+
         if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
           goBack = true; // If the line is never seen signal the method to undo the turning
           break;
         }
-        
+
         try {
           Thread.sleep(CORRECTION_PERIOD);
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
       }
-      
+
       // Undo the previous travel
       if (goBack) {
         leftMotor.rotate(prevTachoLeft - leftMotor.getTachoCount());
         rightMotor.rotate(prevTachoRight - rightMotor.getTachoCount());
       }
-      
+
       leftMotor.stop(true);
       rightMotor.stop(false);
-      
+
       try {
         Thread.sleep(200);
       } catch (InterruptedException e1) {
@@ -313,7 +388,7 @@ public class OdometryCorrector {
       }
 
       // Correct the lagging wheel
-      lineDetected = rotateUntilDetection(1);
+      lineDetected = rotateUntilDetection(1, SHORT_CORRECTION_TIME_LIMIT, goingBackwards);
 
       if (direction == Direction.NORTH || direction == Direction.SOUTH) {
         lastYCorrection = currentLine;
@@ -331,6 +406,16 @@ public class OdometryCorrector {
 
     return true;
   }
+  
+  /**
+   * TODO
+   * 
+   * @param side
+   * @return
+   */
+  public boolean rotateUntilDetection(int side) {
+    return rotateUntilDetection(side, CORRECTION_TIME_LIMIT, false);
+  }
 
   /**
    * Rotates one motor until a line is detected on that side or the time limit is exceeded. If no
@@ -339,7 +424,7 @@ public class OdometryCorrector {
    * @param side Side to rotate. 0 for left, 1 for right.
    * @return True if a line was ever detected, false otherwise.
    */
-  public boolean rotateUntilDetection(int side) {
+  public boolean rotateUntilDetection(int side, int timeLimit, boolean startBackwards) {
     // Stop both motors
     leftMotor.stop(true);
     rightMotor.stop(false);
@@ -348,7 +433,7 @@ public class OdometryCorrector {
     } catch (InterruptedException e2) {
       e2.printStackTrace();
     }
-    
+
     // Adjust for the requested side of rotation
     EV3LargeRegulatedMotor motor = side == 0 ? leftMotor : rightMotor;
     int speed = side == 0 ? (int) (CORRECTION_SPEED * MOTOR_OFFSET) : CORRECTION_SPEED;
@@ -360,7 +445,11 @@ public class OdometryCorrector {
     long prevTacho = motor.getTachoCount();
     long startTime = System.currentTimeMillis();
     motor.setSpeed(speed);
-    motor.forward();
+    
+    if (startBackwards)
+      motor.backward();
+    else 
+      motor.forward();  
 
     while (true) {
       lightPoller.poll();
@@ -368,7 +457,7 @@ public class OdometryCorrector {
       if (inLine) {
         motor.stop(false);
         break;
-      } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+      } else if (System.currentTimeMillis() - startTime > timeLimit) {
         goBack = true; // If the line is never seen signal the method to undo the turning
         break;
       }
@@ -378,7 +467,7 @@ public class OdometryCorrector {
         e.printStackTrace();
       }
     }
-    
+
     try {
       Thread.sleep(200);
     } catch (InterruptedException e1) {
@@ -388,9 +477,8 @@ public class OdometryCorrector {
     // Undo the turning since a line was never seen
     if (goBack) {
       motor.setSpeed(speed);
-      int reverseRotation =
-          side == 0 ? (int) ((prevTacho - motor.getTachoCount()) * MOTOR_OFFSET)
-              : (int) (prevTacho - motor.getTachoCount());
+      int reverseRotation = side == 0 ? (int) ((prevTacho - motor.getTachoCount()) * MOTOR_OFFSET)
+          : (int) (prevTacho - motor.getTachoCount());
       motor.rotate(reverseRotation);
       goBack = false;
     }
@@ -403,7 +491,10 @@ public class OdometryCorrector {
     startTime = System.currentTimeMillis();
 
     motor.setSpeed(speed);
-    motor.backward();
+    if (startBackwards)
+      motor.forward();
+    else 
+      motor.backward();  
 
     while (true) {
       lightPoller.poll();
@@ -411,7 +502,7 @@ public class OdometryCorrector {
       if (inLine) {
         motor.stop(false);
         break;
-      } else if (System.currentTimeMillis() - startTime > CORRECTION_TIME_LIMIT) {
+      } else if (System.currentTimeMillis() - startTime > timeLimit) {
         goBack = true; // If the line is never seen signal the method to undo the turning
         break;
       }
@@ -421,7 +512,7 @@ public class OdometryCorrector {
         e.printStackTrace();
       }
     }
-    
+
     try {
       Thread.sleep(200);
     } catch (InterruptedException e1) {
@@ -431,9 +522,8 @@ public class OdometryCorrector {
     // Undo the turning since a line was never seen
     if (goBack) {
       motor.setSpeed(speed);
-      int reverseRotation =
-          side == 0 ? (int) ((prevTacho - motor.getTachoCount()) * MOTOR_OFFSET)
-              : (int) (prevTacho - motor.getTachoCount());
+      int reverseRotation = side == 0 ? (int) ((prevTacho - motor.getTachoCount()) * MOTOR_OFFSET)
+          : (int) (prevTacho - motor.getTachoCount());
       motor.rotate(reverseRotation);
       return false;
     }

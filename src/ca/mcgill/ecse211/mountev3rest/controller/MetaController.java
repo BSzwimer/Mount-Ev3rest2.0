@@ -35,10 +35,10 @@ import lejos.hardware.lcd.TextLCD;
 public class MetaController {
 
   // Constants
-  private static final String SERVER_IP = "192.168.2.6";
+  private static final String SERVER_IP = "192.168.2.8";
   private static final int TEAM_NUMBER = 11;
   private static final boolean ENABLE_DEBUG_WIFI_PRINT = false;
-  private static final int RINGS_TO_COLLECT = 4;
+  private static final int RINGS_TO_COLLECT = 2;
 
   // Attributes
   private DomainController domainController;
@@ -105,7 +105,7 @@ public class MetaController {
       domainController.goToNextFace();
       domainController.grabRings();
     }
-    // domainController.crossTunnel();
+    domainController.crossTunnel();
     // domainController.releaseRings();
   }
 

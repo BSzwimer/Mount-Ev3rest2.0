@@ -19,8 +19,10 @@ import lejos.robotics.filter.MeanFilter;
 public class LightPoller {
 
   // Constants
-  private static final double LINE_COLOR_VALUE = 0.29; // Minimum value required to treat a sensor
+  private static final double LINE_COLOR_VALUE_LEFT = 0.29; // Minimum value required to treat a sensor
                                                        // reading as a line
+  private static final double LINE_COLOR_VALUE_RIGHT = 0.26;
+  
   private static final int MEAN_SIZE = 1;
 
   // Attributes
@@ -165,14 +167,14 @@ public class LightPoller {
    * Updates the line detection values for the line sensor.
    */
   private void lineDetection() {
-    if (leftMean[0] < LINE_COLOR_VALUE) {
+    if (leftMean[0] < LINE_COLOR_VALUE_LEFT) {
       if (!leftInLine)
       leftInLine = true;
     } else {
       leftInLine = false;
     }
 
-    if (rightMean[0] < LINE_COLOR_VALUE) {
+    if (rightMean[0] < LINE_COLOR_VALUE_RIGHT) {
       rightInLine = true;
     } else {
       rightInLine = false;
