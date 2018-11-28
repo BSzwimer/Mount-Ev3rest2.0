@@ -44,12 +44,15 @@ import lejos.hardware.sensor.EV3UltrasonicSensor;
 public class DomainController {
 
   // Constants
-  private static final double TRACK = 8.50;
+  private static final double TRACK = 8.45;
   private static final double WHEEL_RADIUS = 2.05;
   private static final double TILE_SIZE = 30.48;
-  private static final double MOTOR_OFFSET = 1.02;
+  private static final double MOTOR_OFFSET = 1.015;
   private static final double SENSOR_OFFSET = -2.3;
   private static final int MIN_DIST_TO_TREE = 5;
+  private static final int MIN_DIST_TO_AVOID = 20;
+  private static final double CORRECTION_DIST = 3;
+  private static final double SMALL_DIST = 0.5;
 
   // Attributes
   CoordinateMap map;
@@ -61,6 +64,9 @@ public class DomainController {
   LightPoller lightPoller;
   ArmController armController;
   ColorDetector colorDetector;
+
+  // Status attributes
+  Zone zone;
 
   // Threads
   Thread odoThread;
@@ -108,17 +114,16 @@ public class DomainController {
         TILE_SIZE);
     colorDetector = new ColorDetector(LocalEV3.get().getTextLCD());
     armController = new ArmController(colorSensorMotor, armMotor, leftMotor, rightMotor, navigation,
-        colorDetector);
+        colorDetector, SENSOR_OFFSET);
+
+    // Initialize the zone enumeration
+    zone = Zone.START;
 
     // Initialize and start the required extra threads
     odoThread = new Thread(odometer);
     navThread = new Thread(navigation);
     odoThread.start();
     navThread.start();
-
-
-    // REMOVE
-    odometer.setXYT(TILE_SIZE * 1, TILE_SIZE * 1, 0);
   }
 
   /**
@@ -140,6 +145,357 @@ public class DomainController {
     localizer.localize(map.StartCorner, map.LL_x, map.LL_y, map.UR_x, map.UR_y);
   }
 
+
+  /**
+   * TODO
+   * 
+   * @param targetX
+   * @param preferredDetourDirectionY
+   * @param direction
+   */
+  public boolean getToX(double targetX, double preferredDetourDirectionY) {
+    double[] position = odometer.getXYT();
+    boolean treeInWay;
+    boolean otherTreeInWay;
+    int coordToAvoid = -1;
+    int coordBeforeCollision = -1;
+    boolean tookDetour;
+    boolean detoured = false;
+    Traversal direction;
+
+    if (position[0] < targetX * TILE_SIZE)
+      direction = Traversal.EAST;
+    else
+      direction = Traversal.WEST;
+
+    do {
+      tookDetour = false;
+
+      position = odometer.getXYT();
+      treeInWay = false;
+      otherTreeInWay = false;
+
+      if (Math.abs(map.T_y * TILE_SIZE - position[1]) < MIN_DIST_TO_AVOID
+          && ((direction == Traversal.EAST && position[0] < map.T_x * TILE_SIZE
+              && map.T_x <= targetX)
+              || (direction == Traversal.WEST && position[0] > map.T_x * TILE_SIZE
+                  && map.T_x >= targetX))) {
+        treeInWay = true;
+        coordToAvoid = (int) map.T_y;
+        tookDetour = true;
+        detoured = true;
+      }
+      if (Math.abs(map.T_y_o * TILE_SIZE - position[1]) < MIN_DIST_TO_AVOID
+          && ((direction == Traversal.EAST && position[0] < map.T_x_o * TILE_SIZE
+              && map.T_x_o <= targetX)
+              || (direction == Traversal.WEST && position[0] > map.T_x_o * TILE_SIZE
+                  && map.T_x_o >= targetX))) {
+        otherTreeInWay = true;
+        coordToAvoid = (int) map.T_y_o;
+        tookDetour = true;
+        detoured = true;
+      }
+
+      treeInWay = false;
+      otherTreeInWay = false;
+      tookDetour = false;
+
+      if (treeInWay && otherTreeInWay)
+        if (Math.abs(map.T_x * TILE_SIZE - position[0]) < Math
+            .abs(map.T_x_o * TILE_SIZE - position[0])) {
+          if (direction == Traversal.EAST) {
+            navigation.travelToX(map.T_x - 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_x - 1);
+          } else if (direction == Traversal.WEST) {
+            navigation.travelToX(map.T_x + 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_x + 1);
+          }
+        } else {
+          if (direction == Traversal.EAST) {
+            navigation.travelToX(map.T_x_o - 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_x_o - 1);
+          } else if (direction == Traversal.WEST) {
+            navigation.travelToX(map.T_x_o + 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_x_o + 1);
+          }
+        }
+      else if (treeInWay) {
+        if (direction == Traversal.EAST) {
+          navigation.travelToX(map.T_x - 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_x - 1);
+        } else if (direction == Traversal.WEST) {
+          navigation.travelToX(map.T_x + 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_x + 1);
+        }
+      } else if (otherTreeInWay) {
+        if (direction == Traversal.EAST) {
+          navigation.travelToX(map.T_x_o - 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_x_o - 1);
+        } else if (direction == Traversal.WEST) {
+          navigation.travelToX(map.T_x_o + 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_x_o + 1);
+        }
+      }
+
+      if (tookDetour) {
+        if (Math.abs(preferredDetourDirectionY - (coordToAvoid - 1)) < Math
+            .abs(preferredDetourDirectionY - (coordToAvoid + 1))) {
+          if (zoneContains(coordToAvoid - 1, coordBeforeCollision, false)
+              && coordToAvoid - 1 != preferredDetourDirectionY) {
+            navigation.travelToY(coordToAvoid - 1);
+            navigation.waitNavigation();
+          } else {
+            navigation.travelToY(coordToAvoid + 1);
+            navigation.waitNavigation();
+          }
+        } else {
+          if (zoneContains(coordToAvoid + 1, coordBeforeCollision, false)
+              && coordToAvoid + 1 != preferredDetourDirectionY) {
+            navigation.travelToY(coordToAvoid + 1);
+            navigation.waitNavigation();
+          } else {
+            navigation.travelToY(coordToAvoid - 1);
+            navigation.waitNavigation();
+          }
+        }
+      } else {
+        navigation.travelToX(targetX);
+        navigation.waitNavigation();
+      }
+    } while (tookDetour);
+
+    // return detoured;
+    return false;
+  }
+
+  /**
+   * TODO
+   * 
+   * @param targetY
+   * @param preferredDetourDirectionX
+   * @param direction
+   */
+  private boolean getToY(double targetY, double preferredDetourDirectionX) {
+    double[] position = odometer.getXYT();;
+    boolean treeInWay;
+    boolean otherTreeInWay;
+    int coordToAvoid = -1;
+    int coordBeforeCollision = -1;
+    boolean tookDetour;
+    boolean detoured = false;
+    Traversal direction;
+
+    if (position[1] < targetY * TILE_SIZE)
+      direction = Traversal.NORTH;
+    else
+      direction = Traversal.SOUTH;
+
+    do {
+      tookDetour = false;
+
+      position = odometer.getXYT();
+      treeInWay = false;
+      otherTreeInWay = false;
+
+      if (Math.abs(map.T_x * TILE_SIZE - position[0]) < MIN_DIST_TO_AVOID
+          && ((direction == Traversal.NORTH && position[1] < map.T_y * TILE_SIZE
+              && map.T_y <= targetY)
+              || (direction == Traversal.SOUTH && position[1] > map.T_y * TILE_SIZE
+                  && map.T_y >= targetY))) {
+        treeInWay = true;
+        coordToAvoid = (int) map.T_x;
+        tookDetour = true;
+        detoured = true;
+      }
+      if (Math.abs(map.T_x_o * TILE_SIZE - position[0]) < MIN_DIST_TO_AVOID
+          && ((direction == Traversal.NORTH && position[1] < map.T_y_o * TILE_SIZE
+              && map.T_y_o <= targetY)
+              || (direction == Traversal.SOUTH && position[1] > map.T_y_o * TILE_SIZE
+                  && map.T_y_o >= targetY))) {
+        otherTreeInWay = true;
+        coordToAvoid = (int) map.T_x_o;
+        tookDetour = true;
+        detoured = true;
+      }
+
+      treeInWay = false;
+      otherTreeInWay = false;
+      tookDetour = false;
+      if (treeInWay && otherTreeInWay)
+        if (Math.abs(map.T_y * TILE_SIZE - position[1]) < Math
+            .abs(map.T_y_o * TILE_SIZE - position[1])) {
+          if (direction == Traversal.NORTH) {
+            navigation.travelToY(map.T_y - 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_y - 1);
+          } else if (direction == Traversal.SOUTH) {
+            navigation.travelToY(map.T_y + 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_y + 1);
+          }
+        } else {
+          if (direction == Traversal.NORTH) {
+            navigation.travelToY(map.T_y_o - 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_y_o - 1);
+          } else if (direction == Traversal.SOUTH) {
+            navigation.travelToY(map.T_y_o + 1);
+            navigation.waitNavigation();
+            coordBeforeCollision = (int) (map.T_y_o + 1);
+          }
+        }
+      else if (treeInWay) {
+        if (direction == Traversal.NORTH) {
+          navigation.travelToY(map.T_y - 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_y - 1);
+        } else if (direction == Traversal.SOUTH) {
+          navigation.travelToY(map.T_y + 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_y + 1);
+        }
+      } else if (otherTreeInWay) {
+        if (direction == Traversal.NORTH) {
+          navigation.travelToY(map.T_y_o - 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_y_o - 1);
+        } else if (direction == Traversal.SOUTH) {
+          navigation.travelToY(map.T_y_o + 1);
+          navigation.waitNavigation();
+          coordBeforeCollision = (int) (map.T_y_o + 1);
+        }
+      }
+
+      if (tookDetour) {
+        if (Math.abs(preferredDetourDirectionX - (coordToAvoid - 1)) < Math
+            .abs(preferredDetourDirectionX - (coordToAvoid + 1))) {
+          if (zoneContains(coordToAvoid - 1, coordBeforeCollision, false)
+              && coordToAvoid - 1 != preferredDetourDirectionX) {
+            navigation.travelToX(coordToAvoid - 1);
+            navigation.waitNavigation();
+          } else {
+            navigation.travelToX(coordToAvoid + 1);
+            navigation.waitNavigation();
+          }
+        } else {
+          if (zoneContains(coordToAvoid + 1, coordBeforeCollision, false)
+              && coordToAvoid + 1 != preferredDetourDirectionX) {
+            navigation.travelToX(coordToAvoid + 1);
+            navigation.waitNavigation();
+          } else {
+            navigation.travelToX(coordToAvoid - 1);
+            navigation.waitNavigation();
+          }
+        }
+      } else {
+        navigation.travelToY(targetY);
+        navigation.waitNavigation();
+      }
+    } while (tookDetour);
+
+    // return detoured;
+    return false;
+  }
+
+
+  public void crossTunnel() {
+    Traversal traversal = null;
+
+    boolean wasEnabled = odometryCorrector.isEnabled();
+
+    // Determine how to traverse the tunnel
+    if (zoneContains(map.TN_LL_x, map.TN_LL_y) && zoneContains(map.TN_UR_x, map.TN_LL_y))
+      traversal = Traversal.NORTH;
+    else if (zoneContains(map.TN_UR_x, map.TN_LL_y) && zoneContains(map.TN_UR_x, map.TN_UR_y))
+      traversal = Traversal.WEST;
+    else if (zoneContains(map.TN_LL_x, map.TN_UR_y) && zoneContains(map.TN_UR_x, map.TN_UR_y))
+      traversal = Traversal.SOUTH;
+    else if (zoneContains(map.TN_LL_x, map.TN_LL_y) && zoneContains(map.TN_LL_x, map.TN_UR_y))
+      traversal = Traversal.EAST;
+
+    boolean detoured = false;
+
+    switch (traversal) {
+      case NORTH: // Bridge is placed vertically and the robot is closer to the lower left corner.
+        navigation.travelToY(map.TN_LL_y - 1);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_LL_x + 0.5);
+        navigation.waitNavigation();
+        navigation.travelToY(map.TN_LL_y - 0.9);
+        navigation.waitNavigation();
+        odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
+        navigation.highSpeedOn();
+        navigation.travelToY(map.TN_UR_y + 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        break;
+      case WEST: // Bridge is placed horizontally and the robot is closer to the upper right corner.
+        navigation.travelToX(map.TN_UR_x + 1);
+        navigation.waitNavigation();
+        navigation.travelToY(map.TN_UR_y - 0.5);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_UR_x + 0.9);
+        navigation.waitNavigation();
+        odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
+        navigation.highSpeedOn();
+        navigation.travelToX(map.TN_LL_x - 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        break;
+      case SOUTH: // Bridge is placed vertically and the robot is closer to the upper right corner.
+        navigation.travelToY(map.TN_UR_y + 1);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_UR_x - 0.5);
+        navigation.waitNavigation();
+        navigation.travelToY(map.TN_UR_y + 0.9);
+        navigation.waitNavigation();
+        odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
+        navigation.highSpeedOn();
+        navigation.travelToY(map.TN_LL_y - 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        break;
+      case EAST: // Bridge is placed horizontally and the robot is closer to the lower left corner.
+        navigation.travelToX(map.TN_LL_x - 1);
+        navigation.waitNavigation();
+        navigation.travelToY(map.TN_LL_y + 0.5);
+        navigation.waitNavigation();
+        navigation.travelToX(map.TN_LL_x - 0.9);
+        navigation.waitNavigation();
+        odometryCorrector.disable();
+        odometryCorrector.correctOnNextLine(true);
+        navigation.highSpeedOn();
+        navigation.travelToX(map.TN_UR_x + 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        break;
+    }
+
+    // Update the current zone
+    switch (zone) {
+      case START:
+        zone = Zone.SEARCH;
+        break;
+      case SEARCH:
+        zone = Zone.START;
+        break;
+    }
+
+    if (wasEnabled)
+      odometryCorrector.enable();
+  }
+
   /**
    * Crosses the tunnel specified by the map given coordinates. The method makes sure that the robot
    * reaches the closest entrance of the tunnel, then it moves through it until the robot is
@@ -147,7 +503,7 @@ public class DomainController {
    * 
    * @see CoordinateMap
    */
-  public void crossTunnel() {
+  public void crossTunnelOld() {
     double LL_dist = navigation.computeDistance(map.TN_LL_x, map.TN_LL_y);
     double UR_dist = navigation.computeDistance(map.TN_UR_x, map.TN_UR_y);
 
@@ -209,14 +565,141 @@ public class DomainController {
       odometryCorrector.enable();
   }
 
+  public void approachTree() {
+    boolean wasEnabled = odometryCorrector.isEnabled();
+    odometryCorrector.disable();
+
+    double[] position = odometer.getXYT();
+    if (position[0] < map.T_x * TILE_SIZE && position[1] < map.T_y * TILE_SIZE) {
+      if (navigation.computeDistance(map.T_x - 1, map.T_y) < navigation.computeDistance(map.T_x,
+          map.T_y - 1)) {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x - 1, map.T_y - SMALL_DIST);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(0);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(90);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      } else {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x - SMALL_DIST, map.T_y - 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(90);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(0);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      }
+    } else if (position[0] < map.T_x * TILE_SIZE && position[1] > map.T_y * TILE_SIZE) {
+      if (navigation.computeDistance(map.T_x - 1, map.T_y) < navigation.computeDistance(map.T_x,
+          map.T_y + 1)) {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x - 1, map.T_y + SMALL_DIST);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(180);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(90);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      } else {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x - SMALL_DIST, map.T_y + 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(90);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(180);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      }
+    } else if (position[0] > map.T_x * TILE_SIZE && position[1] > map.T_y * TILE_SIZE) {
+      if (navigation.computeDistance(map.T_x + 1, map.T_y) < navigation.computeDistance(map.T_x,
+          map.T_y + 1)) {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x + 1, map.T_y + SMALL_DIST);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(180);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(270);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      } else {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x + SMALL_DIST, map.T_y + 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(270);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(180);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      }
+    } else if (position[0] > map.T_x * TILE_SIZE && position[1] < map.T_y * TILE_SIZE) {
+      if (navigation.computeDistance(map.T_x + 1, map.T_y) < navigation.computeDistance(map.T_x,
+          map.T_y - 1)) {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x + 1, map.T_y - SMALL_DIST);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(0);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(270);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      } else {
+        navigation.highSpeedOn();
+        navigation.travelTo(map.T_x + SMALL_DIST, map.T_y - 1);
+        navigation.waitNavigation();
+        navigation.highSpeedOff();
+        navigation.turnTo(270);
+        odometryCorrector.correctOnNextLine(false);
+        navigation.advanceDist(-SENSOR_OFFSET);
+        navigation.waitNavigation();
+        navigation.turnTo(0);
+        navigation.advanceDist(CORRECTION_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+      }
+    }
+
+    if (wasEnabled)
+      odometryCorrector.enable();
+  }
+
   /**
    * Approaches the robot to the tree containing the ring set and positions it looking into the
    * nearest face.
    */
-  public void approachTree() {
+  public void approachTreeOld() {
     boolean inY = false;
     boolean inX = false;
-    
+
     double[] position = odometer.getXYT();
     if (Math.abs(position[1] - TILE_SIZE * (map.T_y)) < MIN_DIST_TO_TREE) {
       inY = true;
@@ -240,13 +723,13 @@ public class DomainController {
       navigation.travelToX(map.T_x + 1);
       navigation.waitNavigation();
     }
-    
+
     if (!inX && !inY) {
       navigation.travelToY(map.T_y);
       navigation.waitNavigation();
       inY = true;
     }
-    
+
     position = odometer.getXYT();
     if (inY) {
       if (position[0] < TILE_SIZE * map.T_x) {
@@ -268,45 +751,143 @@ public class DomainController {
    * the the robot is already looking into one of the three faces. This can be achieved by calling
    * {@code approachTree()}.
    */
-  public void goToNextFace() {
+  public void goToNextFace(boolean turn) {
     odometryCorrector.updateDirection();
 
     switch (odometryCorrector.direction) {
       case NORTH:
+        navigation.turnTo(90);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
         navigation.travelToX(map.T_x + 1);
         navigation.waitNavigation();
 
         navigation.travelToY(map.T_y);
         navigation.waitNavigation();
 
-        navigation.turnTo(270);
+        if (turn)
+          navigation.turnTo(270);
         break;
       case EAST:
+        navigation.turnTo(180);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
         navigation.travelToY(map.T_y - 1);
         navigation.waitNavigation();
 
         navigation.travelToX(map.T_x);
         navigation.waitNavigation();
 
-        navigation.turnTo(0);
+        if (turn)
+          navigation.turnTo(0);
         break;
       case SOUTH:
+        navigation.turnTo(270);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
         navigation.travelToX(map.T_x - 1);
         navigation.waitNavigation();
 
         navigation.travelToY(map.T_y);
         navigation.waitNavigation();
 
-        navigation.turnTo(90);
+        if (turn)
+          navigation.turnTo(90);
         break;
       case WEST:
+        navigation.turnTo(0);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
         navigation.travelToY(map.T_y + 1);
         navigation.waitNavigation();
 
         navigation.travelToX(map.T_x);
         navigation.waitNavigation();
 
+        if (turn)
+          navigation.turnTo(180);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Moves the robot to the next tree face in the counter-clockwise direction. This method assumes
+   * the the robot is already looking into one of the three faces. This can be achieved by calling
+   * {@code approachTree()}.
+   */
+  public void goToPrevFace(boolean turn) {
+    odometryCorrector.updateDirection();
+
+    switch (odometryCorrector.direction) {
+      case NORTH:
+        navigation.turnTo(270);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
+        navigation.travelToX(map.T_x - 1);
+        navigation.waitNavigation();
+
+        navigation.travelToY(map.T_y);
+        navigation.waitNavigation();
+
+        if (turn)
+          navigation.turnTo(90);
+        break;
+      case EAST:
+        navigation.turnTo(0);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
+        navigation.travelToY(map.T_y + 1);
+        navigation.waitNavigation();
+
+        navigation.travelToX(map.T_x);
+        navigation.waitNavigation();
+
+        if (turn)
+          navigation.turnTo(180);
+        break;
+      case SOUTH:
+        navigation.turnTo(90);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
+        navigation.travelToX(map.T_x + 1);
+        navigation.waitNavigation();
+
+        navigation.travelToY(map.T_y);
+        navigation.waitNavigation();
+
+        if (turn)
+          navigation.turnTo(270);
+        break;
+      case WEST:
         navigation.turnTo(180);
+        navigation.advanceDist(SMALL_DIST);
+        navigation.waitNavigation();
+        odometryCorrector.correctOnNextLine(true);
+
+        navigation.travelToY(map.T_y - 1);
+        navigation.waitNavigation();
+
+        navigation.travelToX(map.T_x);
+        navigation.waitNavigation();
+
+        if (turn)
+          navigation.turnTo(0);
         break;
       default:
         break;
@@ -323,29 +904,32 @@ public class DomainController {
    * @see ColorDetector
    * @see ArmController
    */
-  public void grabRings() {  
+  public void grabRings(boolean correct) {
     boolean wasEnabled = odometryCorrector.isEnabled();
     odometryCorrector.disable();
-    
-    navigation.advanceDist(5);
-    navigation.waitNavigation();
-    
-    odometryCorrector.correctOnNextLine(true);
-    
+
+    if (correct) {
+      navigation.advanceDist(2.5);
+      navigation.waitNavigation();
+      odometryCorrector.correctOnNextLine(true);
+    }
+
     armController.getRing();
 
     if (wasEnabled)
       odometryCorrector.enable();
   }
-  
+
   /**
    * TODO
    */
   public void releaseRings() {
     boolean wasEnabled = odometryCorrector.isEnabled();
     odometryCorrector.disable();
-    
-    switch((int)map.StartCorner) {
+
+    navigation.highSpeedOn();
+
+    switch ((int) map.StartCorner) {
       case 0:
         navigation.travelTo(map.LL_x + 1, map.LL_y + 1);
         break;
@@ -360,11 +944,59 @@ public class DomainController {
         break;
     }
     navigation.waitNavigation();
-    
+
     armController.releaseRing();
-    
+
+    navigation.highSpeedOff();
+
     if (wasEnabled)
       odometryCorrector.enable();
+  }
+
+
+  /* ---PRIVATE METHODS--- */
+
+
+  private boolean zoneContains(long x, long y) {
+    return zoneContains(x, y, true);
+  }
+
+  /**
+   * TODO
+   * 
+   * @param x
+   * @param y
+   * @return
+   */
+  private boolean zoneContains(long x, long y, boolean includeBoundary) {
+    int LL_x, LL_y, UR_x, UR_y;
+
+    switch (zone) {
+      case START:
+        LL_x = (int) map.LL_x;
+        LL_y = (int) map.LL_y;
+        UR_x = (int) map.UR_x;
+        UR_y = (int) map.UR_y;
+        break;
+      case SEARCH:
+        LL_x = (int) map.I_LL_x;
+        LL_y = (int) map.I_LL_y;
+        UR_x = (int) map.I_UR_x;
+        UR_y = (int) map.I_UR_y;
+        break;
+      default:
+        return false;
+    }
+
+    if (includeBoundary) {
+      if (x >= LL_x && x <= UR_x && y >= LL_y && y <= UR_y)
+        return true;
+    } else {
+      if (x > LL_x && x < UR_x && y > LL_y && y < UR_y)
+        return true;
+    }
+
+    return false;
   }
 
   // REMOVE
@@ -386,22 +1018,24 @@ public class DomainController {
       e.printStackTrace();
     }
 
-    //odometryCorrector.disable();
+    // odometryCorrector.disable();
 
-    odometer.setXYT(TILE_SIZE * 1, TILE_SIZE * 1, 0);
+    /*odometer.setXYT(TILE_SIZE * 1, TILE_SIZE * 1, 0);
     navigation.travelToY(5);
     navigation.waitNavigation();
     navigation.travelToX(6);
-    navigation.waitNavigation();
-    
-    /*navigation.turnTo(90);
+    navigation.waitNavigation();*/
+
+
+    navigation.turnTo(90);
     Button.waitForAnyPress();
     navigation.turnTo(180);
     Button.waitForAnyPress();
     navigation.turnTo(90);
     Button.waitForAnyPress();
     navigation.turnTo(0);
-    Button.waitForAnyPress();*/
+    Button.waitForAnyPress();
+
 
     lcd.clear();
     lcd.drawString("       DONE       ", 0, 4);
@@ -418,8 +1052,16 @@ public class DomainController {
     } catch (PollerException e) {
       e.printStackTrace();
     }
-    //cd.demoDetection();
+    // cd.demoDetection();
     cd.printRed();
+  }
+
+  private enum Zone {
+    START, SEARCH
+  }
+
+  private enum Traversal {
+    NORTH, EAST, SOUTH, WEST
   }
 
 }

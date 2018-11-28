@@ -75,10 +75,10 @@ public class ColorDetector {
       lightPoller.poll();
 
       // Compute the distances of the readings with respect to the reference means
-      boolean blue = computeDistance(BLUE_MEANS, lightPoller.front) < 0.15;
+      boolean blue = computeDistance(BLUE_MEANS, lightPoller.front) < 0.17;
       boolean green = computeDistance(GREEN_MEANS, lightPoller.front) < 0.15;
       boolean yellow = computeDistance(YELLOW_MEANS, lightPoller.front) < 0.15;
-      boolean orange = computeDistance(ORANGE_MEANS, lightPoller.front) < 0.15;
+      boolean orange = computeDistance(ORANGE_MEANS, lightPoller.front) < 0.2;
 
       // Determine which color is detected if any
       if (blue) {

@@ -19,7 +19,7 @@ public class UltrasonicPoller {
   // Singleton instance
   private static UltrasonicPoller usPoller = null;
   private int filter;
-  private static final int FILTER_MIN = 20;
+  private static final int FILTER_MIN = 30;
 
   private SampleProvider sp;
   private MeanFilter mf;
@@ -89,6 +89,13 @@ public class UltrasonicPoller {
         filter++;
       else
         filter = 0;
+      
+      try {
+        Thread.sleep(50);
+      } catch (InterruptedException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
     }
     
     return distance > 255? 255 : distance;

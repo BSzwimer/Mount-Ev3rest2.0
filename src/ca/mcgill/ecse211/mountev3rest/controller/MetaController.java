@@ -35,10 +35,10 @@ import lejos.hardware.lcd.TextLCD;
 public class MetaController {
 
   // Constants
-  private static final String SERVER_IP = "192.168.2.8";
+  private static final String SERVER_IP = "192.168.2.18";
   private static final int TEAM_NUMBER = 11;
   private static final boolean ENABLE_DEBUG_WIFI_PRINT = false;
-  private static final int RINGS_TO_COLLECT = 2;
+  private static final int RINGS_TO_COLLECT = 3;
 
   // Attributes
   private DomainController domainController;
@@ -84,9 +84,11 @@ public class MetaController {
     lcd.clear();
     lcd.drawString("       READY       ", 0, 4);
 
-    Display display = new Display(lcd);
+    /*Display display = new Display(lcd);
     Thread disThread = new Thread(display);
-    disThread.start();
+    disThread.start();*/
+    
+    int treeRotations = 0;
 
     // -- START RING SEARCH ROUTINE --
 
@@ -96,17 +98,43 @@ public class MetaController {
     Sound.beep(); 
     Sound.beep(); 
     Sound.beep();
-    
 
     domainController.crossTunnel();
     domainController.approachTree();
-    domainController.grabRings();
+    Sound.beep(); 
+    Sound.beep(); 
+    Sound.beep();
+    
+    domainController.grabRings(false);
     for(int i = 0; i < RINGS_TO_COLLECT - 1; i++) {
-      domainController.goToNextFace();
-      domainController.grabRings();
+      domainController.goToNextFace(true);
+      treeRotations++;
+      domainController.grabRings(true);
     }
+    
+    switch(treeRotations) {
+      case 1:
+        domainController.goToPrevFace(false);
+        break;
+      case 2:
+        domainController.goToPrevFace(true);
+        domainController.goToPrevFace(false);
+        break;
+      case 3:
+        domainController.goToNextFace(false);
+        break;
+      default:
+        break;
+    }
+    
     domainController.crossTunnel();
-    // domainController.releaseRings();
+    domainController.releaseRings();
+    
+    Sound.beep(); 
+    Sound.beep(); 
+    Sound.beep();
+    Sound.beep(); 
+    Sound.beep();
   }
 
   /**
@@ -132,8 +160,8 @@ public class MetaController {
 
   // REMOVE
   public void testRun() throws OdometerException {
-    //domainController.testNavigation();
-    domainController.testColorDetection();
+    domainController.testNavigation();
+    //domainController.testColorDetection();
   }
 
 }

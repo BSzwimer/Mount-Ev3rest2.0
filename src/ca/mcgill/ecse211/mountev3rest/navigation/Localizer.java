@@ -22,11 +22,11 @@ public class Localizer {
 
   // Constants
   private static final int LOCALIZATION_PERIOD = 25;
-  private static final int US_LOCALIZATION_PERIOD = 10;
+  private static final int US_LOCALIZATION_PERIOD = 25;
   private static final int MIN_US_DETECTIONS = 1;
-  private static final int ROTATE_SPEED = 120;
+  private static final int ROTATE_SPEED = 200;
   private static final int FORWARD_SPEED = 100;
-  private static final int APROX_DIST = 4;
+  private static final int APROX_DIST = 7;
   private final double SENSOR_OFFSET;
   private final double TILE_SIZE;
 
@@ -42,7 +42,6 @@ public class Localizer {
   // Localization Attributes
   private int prevDistance;
   private int currDistance;
-  private boolean measurementTaken;
   private double alpha;
   private double beta;
 
@@ -76,85 +75,6 @@ public class Localizer {
 
     this.SENSOR_OFFSET = SENSOR_OFFSET;
     this.TILE_SIZE = TILE_SIZE;
-  }
-
-  /**
-   * Performs localization using two light sensors assuming that the robot just exited a tunnel.
-   */
-  public void tunnelLocalization() {
-    boolean wasEnabled = odometryCorrector.isEnabled();
-    odometryCorrector.disable();
-
-    double[] position;
-
-    leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);
-
-    leftMotor.forward();
-    rightMotor.forward();
-
-    findLine();
-    position = odometer.getXYT();
-    int currentLine = odometryCorrector.estimateCurrentLine();
-    switch (odometryCorrector.direction) {
-      case NORTH:
-        odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
-        break;
-      case EAST:
-        odometer.setXYT((currentLine * TILE_SIZE) + SENSOR_OFFSET, position[1], 90);
-        break;
-      case SOUTH:
-        odometer.setXYT(position[0], (currentLine * TILE_SIZE) - SENSOR_OFFSET, 180);
-        break;
-      case WEST:
-        odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
-        break;
-    }
-
-    leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);
-
-    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
-    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
-
-    navigation.turnTo(odometer.getXYT()[2] - 90);
-
-    leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);
-
-    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 2), true);
-    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, 2), false);
-
-    leftMotor.forward();
-    rightMotor.forward();
-
-    findLine();
-    position = odometer.getXYT();
-    currentLine = odometryCorrector.estimateCurrentLine();
-    switch (odometryCorrector.direction) {
-      case NORTH:
-        odometer.setXYT(position[0], (currentLine * TILE_SIZE) + SENSOR_OFFSET, 0);
-        break;
-      case EAST:
-        odometer.setXYT((currentLine * TILE_SIZE) + SENSOR_OFFSET, position[1], 90);
-        break;
-      case SOUTH:
-        odometer.setXYT(position[0], (currentLine * TILE_SIZE) - SENSOR_OFFSET, 180);
-        break;
-      case WEST:
-        odometer.setXYT((currentLine * TILE_SIZE) - SENSOR_OFFSET, position[1], 270);
-        break;
-      case INIT:
-    }
-
-    leftMotor.setSpeed(FORWARD_SPEED);
-    rightMotor.setSpeed(FORWARD_SPEED);
-
-    leftMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), true);
-    rightMotor.rotate(Navigation.convertDistance(navigation.WHEEL_RADIUS, -SENSOR_OFFSET), false);
-
-    if (wasEnabled)
-      odometryCorrector.enable();
   }
 
   /**
@@ -209,14 +129,16 @@ public class Localizer {
         continue;
       }
 
-      //System.out.println(String.format("Prev: %d, Curr: %d  |  Count: %d  |  Low: %d, High: %d",
-      //    prevDistance, currDistance, counter, lowDist, highDist));
+      /*System.out.println(String.format("Prev: %d, Curr: %d  |  Count: %d",
+          prevDistance, currDistance, counter));*/
 
       // FALLING EDGE
       if (prevDistance > currDistance) { // Distance decreasing
         counter++;
-        if (prevDistance - currDistance > 35)
+        if (prevDistance - currDistance > 70)
           highDelta = true;
+        else
+          highDelta = false;
       } else if (prevDistance < currDistance) {
         counter = 0;
         highDelta = false;
@@ -224,7 +146,7 @@ public class Localizer {
       }
       
       // Check if edge conditions are met
-      if (counter >= MIN_US_DETECTIONS && highDelta && currDistance < 40) {
+      if /*(counter >= MIN_US_DETECTIONS && highDelta && currDistance < 35)*/ (currDistance < 25 && prevDistance > 25) {
         if (firstSearch) {
           beta = odometer.getXYT()[2];
           leftMotor.backward();
@@ -309,20 +231,20 @@ public class Localizer {
     // Try to get closer to the nearest intersection
     switch ((int) startingCorner) {
       case 0:
-        navigation.turnTo(45);
+        navigation.turnTo(90);
         break;
       case 1:
-        navigation.turnTo(315);
+        navigation.turnTo(0);
         break;
       case 2:
-        navigation.turnTo(225);
+        navigation.turnTo(270);
         break;
       case 3:
-        navigation.turnTo(135);
+        navigation.turnTo(180);
         break;
     }
     
-    leftMotor.setSpeed((int)(FORWARD_SPEED * navigation.MOTOR_OFFSET));
+    /*leftMotor.setSpeed((int)(FORWARD_SPEED * navigation.MOTOR_OFFSET));
     rightMotor.setSpeed(FORWARD_SPEED);
     leftMotor.forward();
     rightMotor.forward();
@@ -335,7 +257,7 @@ public class Localizer {
         e.printStackTrace();
       }
       lightPoller.poll();
-    }
+    }*/
     
     navigation.advanceDist(APROX_DIST);
     navigation.waitNavigation();

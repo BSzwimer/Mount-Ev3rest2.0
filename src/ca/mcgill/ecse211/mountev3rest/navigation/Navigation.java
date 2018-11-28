@@ -19,7 +19,9 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class Navigation implements Runnable {
 
   // Class constants
-  private static final int FORWARD_SPEED = 150;
+  private static int FORWARD_SPEED = 200;
+  private static final int DEFAULT_SPEED = 220;
+  private static final int HIGH_SPEED = 400;
   private static final int ROTATE_SPEED = 80;
   private static final int NAVIGATION_PERIOD = 50;
   private static final int WAIT_PERIOD = 120;
@@ -247,6 +249,20 @@ public class Navigation implements Runnable {
     rightMotor.rotate(Navigation.convertDistance(WHEEL_RADIUS, dist), true);
     isNavigating = true;
   }
+  
+  /**
+   * TODO
+   */
+  public void highSpeedOn() {
+    FORWARD_SPEED = HIGH_SPEED;
+  }
+  
+  /**
+   * TODO
+   */
+  public void highSpeedOff() {
+    FORWARD_SPEED = DEFAULT_SPEED;
+  }
 
 
   /* ---NAVIGATION STATUS INTERFACE--- */
@@ -300,7 +316,14 @@ public class Navigation implements Runnable {
    */
   private void goToTarget() {
     double[] position = odometer.getXYT();
-    if (target[0] != -1) {
+    if (target[0] != -1 && target[1] != -1) {
+      double[] realTarget = computeRealTarget(position[0], position[1], target[0] * TILE_SIZE, target[1] * TILE_SIZE);
+      turnTo(realTarget[1]);
+      leftMotor.setSpeed((int) (FORWARD_SPEED * MOTOR_OFFSET));
+      rightMotor.setSpeed(FORWARD_SPEED);
+      leftMotor.rotate((int) (convertDistance(WHEEL_RADIUS, realTarget[0]) * MOTOR_OFFSET), true);
+      rightMotor.rotate(convertDistance(WHEEL_RADIUS, realTarget[0]), true);
+    } else if (target[0] != -1) {
       double dist = target[0] * TILE_SIZE - position[0];
       if (Math.abs(dist) < MIN_TRAVEL_DISTANCE) {
         return;

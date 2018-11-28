@@ -20,12 +20,12 @@ import lejos.hardware.motor.EV3LargeRegulatedMotor;
 public class OdometryCorrector {
 
   // Constants
-  private static final int CORRECTION_TIME_LIMIT = 2200;
+  private static final int CORRECTION_TIME_LIMIT = 1500;
   private static final int SHORT_CORRECTION_TIME_LIMIT = 1400;
   private static final int ISOLATED_CORRECTION_LIMIT = 7000;
   private static final int FORWARD_SPEED = 120;
-  private static final int CORRECTION_SPEED = 60;
-  private static final int ROTATE_SPEED = 80;
+  private static final int CORRECTION_SPEED = 80;
+  private static final int SAFETY_PAUSE = 200;
   private static final int CORRECTION_PERIOD = 50;
   private final double TILE_SIZE;
   private final double MOTOR_OFFSET;
@@ -321,7 +321,7 @@ public class OdometryCorrector {
       leftMotor.stop(false);
 
       try {
-        Thread.sleep(200);
+        Thread.sleep(SAFETY_PAUSE);
       } catch (InterruptedException e1) {
         e1.printStackTrace();
       }
@@ -382,7 +382,7 @@ public class OdometryCorrector {
       rightMotor.stop(false);
 
       try {
-        Thread.sleep(200);
+        Thread.sleep(SAFETY_PAUSE);
       } catch (InterruptedException e1) {
         e1.printStackTrace();
       }
@@ -429,7 +429,7 @@ public class OdometryCorrector {
     leftMotor.stop(true);
     rightMotor.stop(false);
     try {
-      Thread.sleep(200);
+      Thread.sleep(SAFETY_PAUSE);
     } catch (InterruptedException e2) {
       e2.printStackTrace();
     }
@@ -469,7 +469,7 @@ public class OdometryCorrector {
     }
 
     try {
-      Thread.sleep(200);
+      Thread.sleep(SAFETY_PAUSE);
     } catch (InterruptedException e1) {
       e1.printStackTrace();
     }
@@ -514,7 +514,7 @@ public class OdometryCorrector {
     }
 
     try {
-      Thread.sleep(200);
+      Thread.sleep(SAFETY_PAUSE);
     } catch (InterruptedException e1) {
       e1.printStackTrace();
     }
